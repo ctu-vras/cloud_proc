@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+from copy import copy
+import numpy as np
+import rospy
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs.point_cloud2 import create_cloud_xyz32, read_points
+from tf2_py import TransformException
+from tf2_ros import Buffer, TransformListener
+# Needed for tf2_ros.Buffer.transform(cloud)
+from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
+
+
+def filter_box(x, min, max):
+    idx = ((x >= min) & (x <= max)).all(axis=1, keepdims=False)
+    return x[idx, :]
+
+
+class BoxFilterNode(object):
+
+    def __init__(self):
+        rospy.init_node('box_filter')
+
+        self.box_frame = rospy.get_param('~box_frame', 'laser')
+        self.target_frame = rospy.get_param('~target_frame', 'map')
+        self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
+        self.fields = rospy.get_param('~fields', ['x', 'y', 'z'])
+        self.min = rospy.get_param('~min', [-10.0, -10.0, -10.0])
+        self.min = np.array(self.min)
+        self.max = rospy.get_param('~max', [10.0, 10.0, 10.0])
+        self.max = np.array(self.max)
+        self.log_config()
+
+        self.tf = Buffer()
+        self.tf_sub = TransformListener(self.tf)
+
+        self.cloud_pub = rospy.Publisher('out', PointCloud2, queue_size=2)
+        self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
+
+    def log_config(self):
+        rospy.loginfo('Box frame (to apply filter in): %s', self.box_frame)
+        rospy.loginfo('Target frame (to transform to after filtering): %s', self.target_frame)
+        rospy.loginfo('Fixed frame (to use when transforming): %s', self.fixed_frame)
+        rospy.loginfo('Filter fields (in box frame): %s', self.fields)
+        rospy.loginfo('Box minimum (in box frame): %s', self.min)
+        rospy.loginfo('Box maximum (in box frame): %s', self.max)
+
+    def cloud_cb(self, msg):
+        try:
+            msg = self.tf.transform_full(msg, self.box_frame, msg.header.stamp, self.fixed_frame)
+            # TODO: Output all fields, not only the filtering ones.
+            x = read_points(msg, field_names=self.fields, skip_nans=True)
+            x = np.array(list(x))
+            n0 = x.shape[0]
+            x = filter_box(x, self.min, self.max)
+            n1 = x.shape[0]
+            rospy.loginfo('Cloud filtered: %i from %i kept.', n1, n0)
+            out = create_cloud_xyz32(copy(msg.header), x)
+            out = self.tf.transform_full(out, self.target_frame, out.header.stamp, self.fixed_frame)
+            self.cloud_pub.publish(out)
+        except TransformException as ex:
+            rospy.logerr(ex.message)
+
+
+if __name__ == '__main__':
+    node = BoxFilterNode()
+    rospy.spin()

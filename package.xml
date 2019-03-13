@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+    <name>cloud_proc</name>
+    <version>0.0.0</version>
+    <description>Point cloud processing</description>
+    <maintainer email="tpetricek@gmail.com">Tomas Petricek</maintainer>
+    <license>BSD</license>
+    <!-- <url type="website">http://wiki.ros.org/cloud_proc</url> -->
+    <author email="tpetricek@gmail.com">Tomas Petricek</author>
+    
+    <depend>message_runtime</depend>
+    <depend>nav_msgs</depend>
+    <depend>rospy</depend>
+    <depend>sensor_msgs</depend>
+    <depend>tf2</depend>
+    <depend>tf2_ros</depend>
+    <depend>tf2_sensor_msgs</depend>
+    
+    <buildtool_depend>catkin</buildtool_depend>
+</package>

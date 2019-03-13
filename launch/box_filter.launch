@@ -1,0 +1,19 @@
+<launch>
+    <arg name="box_frame" default="laser"/>
+    <arg name="target_frame" default="map"/>
+    <arg name="fixed_frame" default="map"/>
+    <arg name="in" default="cloud"/>
+    <arg name="out" default="cloud_box"/>
+
+    <node name="box_filter" pkg="cloud_proc" type="box_filter" output="screen">
+        <param name="box_frame" value="$(arg box_frame)"/>
+        <param name="target_frame" value="$(arg target_frame)"/>
+        <param name="fixed_frame" value="$(arg fixed_frame)"/>
+        <rosparam param="fields">['x', 'y', 'z']</rosparam>
+        <rosparam param="min">[-5.0, -5.0, -1.5]</rosparam>
+        <rosparam param="max">[ 5.0,  5.0,  1.0]</rosparam>
+
+        <remap from="in" to="$(arg in)"/>
+        <remap from="out" to="$(arg out)"/>
+    </node>
+</launch>
