@@ -1,20 +1,48 @@
 #!/usr/bin/env python
+"""
+Point cloud box filter with custom filter and target frames.
 
+TODO: Output all fields, not only the filtering ones.
+TODO: Use structured numpy arrays for retaining all fields and further speed up..
+"""
 from __future__ import absolute_import, division, print_function
 from copy import copy
 import numpy as np
 import rospy
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.point_cloud2 import create_cloud_xyz32, read_points
+from tf.transformations import quaternion_matrix
 from tf2_py import TransformException
 from tf2_ros import Buffer, TransformListener
 # Needed for tf2_ros.Buffer.transform(cloud)
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
+from timeit import default_timer as timer
+
+
+def slots(msg):
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+def array(msg):
+    return np.array(slots(msg))
+
+
+def wxyz(xyzw):
+    shape = xyzw.shape
+    xyzw = xyzw.ravel()
+    return np.array([xyzw[3], xyzw[0], xyzw[1], xyzw[2]]).reshape(shape)
 
 
 def filter_box(x, min, max):
     idx = ((x >= min) & (x <= max)).all(axis=1, keepdims=False)
     return x[idx, :]
+
+
+def se3_from_tf(tf):
+    q = wxyz(array(tf.transform.rotation))
+    R = quaternion_matrix(q)[:3, :3]
+    t = array(tf.transform.translation)
+    return R, t
 
 
 class BoxFilterNode(object):
@@ -31,6 +59,8 @@ class BoxFilterNode(object):
         self.max = rospy.get_param('~max', [10.0, 10.0, 10.0])
         self.max = np.array(self.max)
         self.tf_timeout = rospy.Duration(rospy.get_param('~tf_timeout', 0.1))
+        self.last_stamp = rospy.Time()
+        self.max_age = rospy.Duration(rospy.get_param('~max_age', 1.0))
         self.log_config()
 
         self.tf = Buffer()
@@ -48,18 +78,36 @@ class BoxFilterNode(object):
         rospy.loginfo('Box maximum (in box frame): %s', self.max)
 
     def cloud_cb(self, msg):
+        now = rospy.Time.now()
+        if (now - msg.header.stamp) > self.max_age:
+            rospy.loginfo('Discarding old message (%s - %s > %s).', now, msg.header.stamp, self.max_age)
+
+        t0 = timer()
         try:
-            msg = self.tf.transform_full(msg, self.box_frame, msg.header.stamp, self.fixed_frame, self.tf_timeout)
-            # TODO: Output all fields, not only the filtering ones.
+            # msg = self.tf.transform_full(msg, self.box_frame, msg.header.stamp, self.fixed_frame, self.tf_timeout)
             x = read_points(msg, field_names=self.fields, skip_nans=True)
             x = np.array(list(x))
+            tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
+                                               msg.header.frame_id, msg.header.stamp,
+                                               self.fixed_frame, self.tf_timeout)
+            R, t = se3_from_tf(tf)
+            x = np.dot(x, R.T) + t.T
             n0 = x.shape[0]
             x = filter_box(x, self.min, self.max)
             n1 = x.shape[0]
-            rospy.loginfo('Cloud filtered: %i from %i kept.', n1, n0)
-            out = create_cloud_xyz32(copy(msg.header), x)
-            out = self.tf.transform_full(out, self.target_frame, out.header.stamp, self.fixed_frame, self.tf_timeout)
+            rospy.loginfo('Cloud filtered: %i points from %i kept.', n1, n0)
+            # out = create_cloud_xyz32(msg.header, x)
+            # out = self.tf.transform_full(out, self.target_frame, out.header.stamp, self.fixed_frame, self.tf_timeout)
+            tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
+                                               self.box_frame, msg.header.stamp,
+                                               self.fixed_frame, self.tf_timeout)
+            R, t = se3_from_tf(tf)
+            x = np.dot(x, R.T) + t.T
+            header = copy(msg.header)
+            header.frame_id = self.target_frame
+            out = create_cloud_xyz32(header, x)
             self.cloud_pub.publish(out)
+            rospy.logdebug('Cloud filter: %.3f s', timer() - t0)
         except TransformException as ex:
             rospy.logerr(ex.message)
 
