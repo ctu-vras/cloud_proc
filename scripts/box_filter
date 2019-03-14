@@ -78,11 +78,11 @@ class BoxFilterNode(object):
         rospy.loginfo('Box maximum (in box frame): %s', self.max)
 
     def cloud_cb(self, msg):
-        now = rospy.Time.now()
-        if (now - msg.header.stamp) > self.max_age:
-            rospy.loginfo('Discarding old message (%s - %s > %s).', now, msg.header.stamp, self.max_age)
-
         t0 = timer()
+        age = rospy.Time.now() - msg.header.stamp
+        if age > self.max_age:
+            rospy.loginfo('Discarding old message (%.3f s).', age.to_sec())
+
         try:
             # msg = self.tf.transform_full(msg, self.box_frame, msg.header.stamp, self.fixed_frame, self.tf_timeout)
             x = read_points(msg, field_names=self.fields, skip_nans=True)
