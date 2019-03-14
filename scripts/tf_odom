@@ -2,10 +2,18 @@
 
 from __future__ import absolute_import, division, print_function
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Header
+import roslib
+from roslib.message import get_message_class
 import rospy
 from tf2_py import TransformException
 from tf2_ros import Buffer, TransformListener
+
+
+def deserialize(msg):
+    msg_name = msg._connection_header['type']
+    msg_class = get_message_class(msg_name)
+    msg = msg_class().deserialize(msg._buff)
+    return msg
 
 
 class TfToOdomNode(object):
@@ -16,6 +24,7 @@ class TfToOdomNode(object):
         self.parent_frame = rospy.get_param('~parent_frame', 'map')
         self.child_frame = rospy.get_param('~child_frame', 'base_link')
         self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
+        self.timeout = rospy.Duration(rospy.get_param('~timeout', 0.1))
         self.log_config()
 
         self.tf = Buffer()
@@ -27,7 +36,6 @@ class TfToOdomNode(object):
 
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=2)
         self.trigger_sub = rospy.Subscriber('trigger', rospy.AnyMsg, self.trigger_cb, queue_size=2)
-        self.header_sub = rospy.Subscriber('header', Header, self.header_cb, queue_size=2)
 
     def log_config(self):
         rospy.loginfo('Parent frame: %s', self.parent_frame)
@@ -35,29 +43,15 @@ class TfToOdomNode(object):
         rospy.loginfo('Fixed frame: %s', self.fixed_frame)
 
     def trigger_cb(self, msg):
+        msg = deserialize(msg)
         try:
             tf = self.tf.lookup_transform_full(self.parent_frame, msg.header.stamp,
                                                self.child_frame, msg.header.stamp,
-                                               self.fixed_frame)
+                                               self.fixed_frame, self.timeout)
             odom = Odometry()
             odom.header.frame_id = self.parent_frame
             odom.child_frame_id = self.child_frame
             odom.header.stamp = msg.header.stamp
-            odom.pose.pose.orientation = tf.transform.rotation
-            odom.pose.pose.position = tf.transform.translation
-            self.odom_pub.publish(odom)
-        except TransformException as ex:
-            rospy.logerr(ex.message)
-
-    def header_cb(self, header):
-        try:
-            tf = self.tf.lookup_transform_full(self.parent_frame, header.stamp,
-                                               self.child_frame, header.stamp,
-                                               self.fixed_frame)
-            odom = Odometry()
-            odom.header.frame_id = self.parent_frame
-            odom.child_frame_id = self.child_frame
-            odom.header.stamp = header.stamp
             odom.pose.pose.orientation = tf.transform.rotation
             odom.pose.pose.position = tf.transform.translation
             self.odom_pub.publish(odom)
