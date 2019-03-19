@@ -55,9 +55,9 @@ class BoxFilterNode(object):
         self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
         self.fields = rospy.get_param('~fields', ['x', 'y', 'z'])
         self.min = rospy.get_param('~min', [-10.0, -10.0, -10.0])
-        self.min = np.array(self.min)
+        self.min = np.array(self.min)[None, :]
         self.max = rospy.get_param('~max', [10.0, 10.0, 10.0])
-        self.max = np.array(self.max)
+        self.max = np.array(self.max)[None, :]
         self.tf_timeout = rospy.Duration(rospy.get_param('~tf_timeout', 0.1))
         self.last_stamp = rospy.Time()
         self.max_age = rospy.Duration(rospy.get_param('~max_age', 1.0))
@@ -79,32 +79,44 @@ class BoxFilterNode(object):
 
     def cloud_cb(self, msg):
         t0 = timer()
-        age = rospy.Time.now() - msg.header.stamp
+        # Keep the original stamp, avoid updating it in transform_full.
+        stamp = msg.header.stamp
+        age = rospy.Time.now() - stamp
         if age > self.max_age:
             rospy.loginfo('Discarding old message (%.3f s).', age.to_sec())
+            return
 
         try:
-            # msg = self.tf.transform_full(msg, self.box_frame, msg.header.stamp, self.fixed_frame, self.tf_timeout)
+            msg = self.tf.transform_full(msg, self.box_frame, stamp, self.fixed_frame, self.tf_timeout)
             x = read_points(msg, field_names=self.fields, skip_nans=True)
             x = np.array(list(x))
-            tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
-                                               msg.header.frame_id, msg.header.stamp,
-                                               self.fixed_frame, self.tf_timeout)
-            R, t = se3_from_tf(tf)
-            x = np.dot(x, R.T) + t.T
+            # TODO: Fix conversion (lookup).
+            # tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
+            #                                    msg.header.frame_id, msg.header.stamp,
+            #                                    self.fixed_frame, self.tf_timeout)
+            # R, t = se3_from_tf(tf)
+            # rospy.loginfo('%s to %s R:\n%s', msg.header.frame_id, self.box_frame, R)
+            # rospy.loginfo('%s to %s t:\n%s', msg.header.frame_id, self.box_frame, t)
+            # x = np.dot(x, R.T) + t.T
             n0 = x.shape[0]
             x = filter_box(x, self.min, self.max)
             n1 = x.shape[0]
-            # out = create_cloud_xyz32(msg.header, x)
-            # out = self.tf.transform_full(out, self.target_frame, out.header.stamp, self.fixed_frame, self.tf_timeout)
-            tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
-                                               self.box_frame, msg.header.stamp,
-                                               self.fixed_frame, self.tf_timeout)
-            R, t = se3_from_tf(tf)
-            x = np.dot(x, R.T) + t.T
-            header = copy(msg.header)
-            header.frame_id = self.target_frame
-            out = create_cloud_xyz32(header, x)
+            out = create_cloud_xyz32(msg.header, x)
+            out = self.tf.transform_full(out, self.target_frame, stamp, self.fixed_frame, self.tf_timeout)
+            # rospy.loginfo(msg.header.stamp)
+            # rospy.loginfo(out.header.stamp)
+            out.header.stamp = stamp
+
+            # tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
+            #                                    self.box_frame, msg.header.stamp,
+            #                                    self.fixed_frame, self.tf_timeout)
+            # R, t = se3_from_tf(tf)
+            # rospy.loginfo('%s to %s R:\n%s', self.box_frame, self.target_frame, R)
+            # rospy.loginfo('%s to %s t:\n%s', self.box_frame, self.target_frame, t)
+            # x = np.dot(x, R.T) + t.T
+            # header = copy(msg.header)
+            # header.frame_id = self.target_frame
+            # out = create_cloud_xyz32(header, x)
             self.cloud_pub.publish(out)
             rospy.loginfo('Cloud filtered: %i points from %i kept (%.3f s).', n1, n0, timer() - t0)
         except TransformException as ex:
