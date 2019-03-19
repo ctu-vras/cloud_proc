@@ -95,7 +95,6 @@ class BoxFilterNode(object):
             n0 = x.shape[0]
             x = filter_box(x, self.min, self.max)
             n1 = x.shape[0]
-            rospy.loginfo('Cloud filtered: %i points from %i kept.', n1, n0)
             # out = create_cloud_xyz32(msg.header, x)
             # out = self.tf.transform_full(out, self.target_frame, out.header.stamp, self.fixed_frame, self.tf_timeout)
             tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
@@ -107,7 +106,7 @@ class BoxFilterNode(object):
             header.frame_id = self.target_frame
             out = create_cloud_xyz32(header, x)
             self.cloud_pub.publish(out)
-            rospy.logdebug('Cloud filter: %.3f s', timer() - t0)
+            rospy.loginfo('Cloud filtered: %i points from %i kept (%.3f s).', n1, n0, timer() - t0)
         except TransformException as ex:
             rospy.logerr(ex.message)
 
