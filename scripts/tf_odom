@@ -52,8 +52,8 @@ class TfToOdomNode(object):
             tf = self.tf.lookup_transform_full(self.parent_frame, msg.header.stamp,
                                                self.child_frame, msg.header.stamp,
                                                self.fixed_frame, self.timeout)
-            rospy.loginfo('%s position in %s: (%.3f, %.3f, %.3f)',
-                          self.child_frame, self.parent_frame, *slots(tf.transform.translation))
+            rospy.logdebug('%s position in %s: (%.3f, %.3f, %.3f)',
+                           self.child_frame, self.parent_frame, *slots(tf.transform.translation))
             odom = Odometry()
             odom.header.frame_id = self.parent_frame
             odom.child_frame_id = self.child_frame
