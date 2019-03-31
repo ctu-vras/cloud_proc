@@ -1,48 +1,15 @@
 #!/usr/bin/env python
 """
 Point cloud box filter with custom filter and target frames.
-
-TODO: Output all fields, not only the filtering ones.
-TODO: Use structured numpy arrays for retaining all fields and further speed up..
 """
 from __future__ import absolute_import, division, print_function
-from copy import copy
 import numpy as np
 import rospy
+from ros_numpy import msgify, numpify
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs.point_cloud2 import create_cloud_xyz32, read_points
-from tf.transformations import quaternion_matrix
 from tf2_py import TransformException
 from tf2_ros import Buffer, TransformListener
-# Needed for tf2_ros.Buffer.transform(cloud)
-from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from timeit import default_timer as timer
-
-
-def slots(msg):
-    return [getattr(msg, var) for var in msg.__slots__]
-
-
-def array(msg):
-    return np.array(slots(msg))
-
-
-def wxyz(xyzw):
-    shape = xyzw.shape
-    xyzw = xyzw.ravel()
-    return np.array([xyzw[3], xyzw[0], xyzw[1], xyzw[2]]).reshape(shape)
-
-
-def filter_box(x, min, max):
-    idx = ((x >= min) & (x <= max)).all(axis=1, keepdims=False)
-    return x[idx, :]
-
-
-def se3_from_tf(tf):
-    q = wxyz(array(tf.transform.rotation))
-    R = quaternion_matrix(q)[:3, :3]
-    t = array(tf.transform.translation)
-    return R, t
 
 
 class BoxFilterNode(object):
@@ -55,9 +22,9 @@ class BoxFilterNode(object):
         self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
         self.fields = rospy.get_param('~fields', ['x', 'y', 'z'])
         self.min = rospy.get_param('~min', [-10.0, -10.0, -10.0])
-        self.min = np.array(self.min)[None, :]
+        self.min = np.array(self.min)[:, None]
         self.max = rospy.get_param('~max', [10.0, 10.0, 10.0])
-        self.max = np.array(self.max)[None, :]
+        self.max = np.array(self.max)[:, None]
         self.tf_timeout = rospy.Duration(rospy.get_param('~tf_timeout', 0.1))
         self.last_stamp = rospy.Time()
         self.max_age = rospy.Duration(rospy.get_param('~max_age', 1.0))
@@ -74,8 +41,8 @@ class BoxFilterNode(object):
         rospy.loginfo('Target frame (to transform to after filtering): %s', self.target_frame)
         rospy.loginfo('Fixed frame (to use when transforming): %s', self.fixed_frame)
         rospy.loginfo('Filter fields (in box frame): %s', self.fields)
-        rospy.loginfo('Box minimum (in box frame): %s', self.min)
-        rospy.loginfo('Box maximum (in box frame): %s', self.max)
+        rospy.loginfo('Box minimum (in box frame): %s', self.min.ravel().tolist())
+        rospy.loginfo('Box maximum (in box frame): %s', self.max.ravel().tolist())
 
     def cloud_cb(self, msg):
         t0 = timer()
@@ -87,37 +54,35 @@ class BoxFilterNode(object):
             return
 
         try:
-            msg = self.tf.transform_full(msg, self.box_frame, stamp, self.fixed_frame, self.tf_timeout)
-            x = read_points(msg, field_names=self.fields, skip_nans=True)
-            x = np.array(list(x))
-            # TODO: Fix conversion (lookup).
-            # tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
-            #                                    msg.header.frame_id, msg.header.stamp,
-            #                                    self.fixed_frame, self.tf_timeout)
-            # R, t = se3_from_tf(tf)
-            # rospy.loginfo('%s to %s R:\n%s', msg.header.frame_id, self.box_frame, R)
-            # rospy.loginfo('%s to %s t:\n%s', msg.header.frame_id, self.box_frame, t)
-            # x = np.dot(x, R.T) + t.T
-            n0 = x.shape[0]
-            x = filter_box(x, self.min, self.max)
-            n1 = x.shape[0]
-            out = create_cloud_xyz32(msg.header, x)
-            out = self.tf.transform_full(out, self.target_frame, stamp, self.fixed_frame, self.tf_timeout)
-            # rospy.loginfo(msg.header.stamp)
-            # rospy.loginfo(out.header.stamp)
-            out.header.stamp = stamp
-
-            # tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
-            #                                    self.box_frame, msg.header.stamp,
-            #                                    self.fixed_frame, self.tf_timeout)
-            # R, t = se3_from_tf(tf)
-            # rospy.loginfo('%s to %s R:\n%s', self.box_frame, self.target_frame, R)
-            # rospy.loginfo('%s to %s t:\n%s', self.box_frame, self.target_frame, t)
-            # x = np.dot(x, R.T) + t.T
-            # header = copy(msg.header)
-            # header.frame_id = self.target_frame
-            # out = create_cloud_xyz32(header, x)
-            self.cloud_pub.publish(out)
+            cloud = numpify(msg)
+            x = np.stack(cloud[f] for f in self.fields)
+            # Transform the cloud into filter frame.
+            tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
+                                               msg.header.frame_id, msg.header.stamp,
+                                               self.fixed_frame, self.tf_timeout)
+            T = numpify(tf.transform)
+            R, t = T[:3, :3], T[:3, 3:]
+            x = np.matmul(R, x) + t
+            # Keep points inside the box.
+            n0 = cloud.size
+            keep = ((x >= self.min) & (x <= self.max)).all(axis=0)
+            x = x[:, keep]
+            cloud = cloud[keep]
+            n1 = cloud.size
+            # Transform the cloud into target frame.
+            tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
+                                               self.box_frame, msg.header.stamp,
+                                               self.fixed_frame, self.tf_timeout)
+            T = numpify(tf.transform)
+            R, t = T[:3, :3], T[:3, 3:]
+            x = np.matmul(R, x) + t
+            for i, f in enumerate(self.fields):
+                cloud[f] = x[i, :]
+            # Create and publish message with filtered cloud.
+            msg = msgify(PointCloud2, cloud)
+            msg.header.frame_id = self.target_frame
+            msg.header.stamp = stamp
+            self.cloud_pub.publish(msg)
             rospy.loginfo('Cloud filtered: %i points from %i kept (%.3f s).', n1, n0, timer() - t0)
         except TransformException as ex:
             rospy.logerr(ex.message)

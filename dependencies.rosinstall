@@ -1,0 +1,4 @@
+- git:
+    local-name: ros_numpy
+    uri: https://github.com/eric-wieser/ros_numpy
+    version: master
