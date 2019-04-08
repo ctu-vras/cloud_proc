@@ -1,0 +1,19 @@
+<launch>
+    <arg name="parent_frame" default="odom"/>
+    <arg name="child_frame" default="base_link"/>
+    <arg name="timeout" default="0.1"/>
+    <arg name="timer_freq" default="1.0"/>
+
+    <arg name="pose_topic" default="pose"/>
+    <arg name="odom_topic" default="odom"/>
+
+    <node name="tf_odom" pkg="cloud_proc" type="tf_odom" output="screen">
+        <param name="parent_frame" value="$(arg parent_frame)"/>
+        <param name="child_frame" value="$(arg child_frame)"/>
+        <param name="timeout" value="$(arg timeout)"/>
+        <param name="timer_freq" value="$(arg timer_freq)"/>
+
+        <remap from="pose" to="$(arg pose_topic)"/>
+        <remap from="odom" to="$(arg odom_topic)"/>
+    </node>
+</launch>
