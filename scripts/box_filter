@@ -55,7 +55,8 @@ class BoxFilterNode(object):
 
         try:
             cloud = numpify(msg)
-            x = np.stack([cloud[f].ravel() for f in self.fields])
+            cloud = cloud.ravel()  # Flatten 2D clouds.
+            x = np.stack([cloud[f] for f in self.fields])
             # Transform the cloud into filter frame.
             tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
                                                msg.header.frame_id, msg.header.stamp,
