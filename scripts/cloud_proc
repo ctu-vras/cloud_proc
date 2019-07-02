@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+"""
+Point cloud processor / filter chain.
+"""
+from __future__ import absolute_import, division, print_function
+from cloud_proc import configure_filters, FilterChain
+import rospy
+from ros_numpy import msgify, numpify
+from sensor_msgs.msg import PointCloud2
+
+
+class CloudProcNode(object):
+
+    def __init__(self):
+        self.chain = FilterChain(configure_filters(rospy.get_param('~filters', [])))
+        self.cloud_pub = rospy.Publisher('out', PointCloud2, queue_size=2)
+        self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
+
+    def cloud_cb(self, msg):
+        cloud = numpify(msg)
+        header = msg.header
+        cloud, header = self.chain.filter(cloud, header)
+        if cloud is not None:
+            msg = msgify(PointCloud2, cloud)
+            msg.header = header
+            self.cloud_pub.publish(msg)
+
+
+if __name__ == '__main__':
+    rospy.init_node('cloud_proc')
+    node = CloudProcNode()
+    rospy.spin()

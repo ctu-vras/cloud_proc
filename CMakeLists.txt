@@ -12,6 +12,6 @@ catkin_package(
 )
 
 catkin_install_python(
-    PROGRAMS scripts/box_filter scripts/tf_odom
+    PROGRAMS scripts/box_filter scripts/cloud_proc scripts/tf_odom
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
