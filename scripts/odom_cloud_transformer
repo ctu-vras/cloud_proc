@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+"""
+Odometry cloud transformer.
+"""
+from __future__ import absolute_import, division, print_function
+from cloud_proc import transform
+from message_filters import ApproximateTimeSynchronizer, Subscriber, TimeSynchronizer
+from nav_msgs.msg import Odometry
+import rospy
+from ros_numpy import msgify, numpify
+from sensor_msgs.msg import PointCloud2
+from timeit import default_timer as timer
+
+
+class OdomCloudTransformer(object):
+
+    def __init__(self):
+        self.check_frames = rospy.get_param('~check_frames', True)
+        self.queue_size = rospy.get_param('~queue_size', 2)
+        self.slop = rospy.get_param('~slop', 0.)
+        self.fields = rospy.get_param('~fields', [['x', 'y', 'z']])
+        self.rotate = rospy.get_param('~rotate', [[]])
+
+        self.cloud_pub = rospy.Publisher('output', PointCloud2, queue_size=2)
+
+        subs = [Subscriber("odom", Odometry), Subscriber("input", PointCloud2)]
+        if self.slop > 0.:
+            self.sync = ApproximateTimeSynchronizer(subs, self.queue_size, self.slop)
+        else:
+            self.sync = TimeSynchronizer(subs, self.queue_size)
+        self.sync.registerCallback(self.cb)
+
+    def cb(self, odom, input):
+        t0 = timer()
+        assert not self.check_frames or odom.child_frame_id == input.header.frame_id
+        tf = numpify(odom.pose.pose)
+        cloud = numpify(input)
+        cloud = transform(tf, cloud.copy(), self.fields, self.rotate)
+        output = msgify(PointCloud2, cloud)
+        output.header.stamp = input.header.stamp
+        output.header.frame_id = odom.header.frame_id
+        rospy.loginfo('Cloud with %i points transformed to %s (%.3f s).',
+                      cloud.size, odom.header.frame_id, timer() - t0)
+        self.cloud_pub.publish(output)
+
+
+if __name__ == '__main__':
+    rospy.init_node('odom_cloud_transformer')
+    node = OdomCloudTransformer()
+    rospy.spin()
