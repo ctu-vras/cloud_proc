@@ -55,6 +55,7 @@ def transform(tf, cloud, fields=(('x', 'y', 'z'),), rotate=()):
     if rotate and isinstance(rotate[0], str):
         rotate = [rotate]
     rot, t = tf[:3, :3], tf[:3, 3:]
+    cloud = cloud.ravel()
     for fs in fields:
         if len(fs) != 3:
             rospy.logwarn_once('Fields cannot be transformed: %s.' % fs)
