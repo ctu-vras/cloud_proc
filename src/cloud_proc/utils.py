@@ -1,7 +1,10 @@
 from __future__ import absolute_import, division, print_function
 from importlib import import_module
 
-__all__ = ['col', 'resolve_class']
+__all__ = [
+    'col',
+    'resolve_class'
+]
 
 
 def col(x):
@@ -12,6 +15,7 @@ def resolve_class(name):
     i = name.rfind('.')
     if i < 0:
         return eval(name)
-    mod = name[:i]
-    import_module(mod)
-    return eval(name)
+    mod_name = name[:i]
+    # TODO: Check multi package path.
+    mod = import_module(mod_name)
+    return eval(name, {}, {mod_name: mod})
