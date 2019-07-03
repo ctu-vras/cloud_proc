@@ -7,19 +7,16 @@ import numpy as np
 import rospy
 from ros_numpy import msgify, numpify
 from sensor_msgs.msg import PointCloud2
+from tf2_client import get_buffer
 from tf2_py import TransformException
-from tf2_ros import Buffer, TransformListener
 from timeit import default_timer as timer
 
 
 class BoxFilterNode(object):
 
     def __init__(self):
-        rospy.init_node('box_filter')
-
         self.box_frame = rospy.get_param('~box_frame', 'laser')
         self.target_frame = rospy.get_param('~target_frame', 'map')
-        self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
         self.fields = rospy.get_param('~fields', ['x', 'y', 'z'])
         self.min = rospy.get_param('~min', [-10.0, -10.0, -10.0])
         self.min = np.array(self.min)[:, None]
@@ -30,8 +27,7 @@ class BoxFilterNode(object):
         self.max_age = rospy.Duration(rospy.get_param('~max_age', 1.0))
         self.log_config()
 
-        self.tf = Buffer()
-        self.tf_sub = TransformListener(self.tf)
+        self.tf = get_buffer()
 
         self.cloud_pub = rospy.Publisher('out', PointCloud2, queue_size=2)
         self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
@@ -39,7 +35,6 @@ class BoxFilterNode(object):
     def log_config(self):
         rospy.loginfo('Box frame (to apply filter in): %s', self.box_frame)
         rospy.loginfo('Target frame (to transform to after filtering): %s', self.target_frame)
-        rospy.loginfo('Fixed frame (to use when transforming): %s', self.fixed_frame)
         rospy.loginfo('Filter fields (in box frame): %s', self.fields)
         rospy.loginfo('Box minimum (in box frame): %s', self.min.ravel().tolist())
         rospy.loginfo('Box maximum (in box frame): %s', self.max.ravel().tolist())
@@ -58,9 +53,7 @@ class BoxFilterNode(object):
             cloud = cloud.ravel()  # Flatten 2D clouds.
             x = np.stack([cloud[f] for f in self.fields])
             # Transform the cloud into filter frame.
-            tf = self.tf.lookup_transform_full(self.box_frame, msg.header.stamp,
-                                               msg.header.frame_id, msg.header.stamp,
-                                               self.fixed_frame, self.tf_timeout)
+            tf = self.tf.lookup_transform(self.box_frame, msg.header.frame_id, msg.header.stamp, self.tf_timeout)
             T = numpify(tf.transform)
             R, t = T[:3, :3], T[:3, 3:]
             x = np.matmul(R, x) + t
@@ -71,9 +64,7 @@ class BoxFilterNode(object):
             cloud = cloud[keep]
             n1 = cloud.size
             # Transform the cloud into target frame.
-            tf = self.tf.lookup_transform_full(self.target_frame, msg.header.stamp,
-                                               self.box_frame, msg.header.stamp,
-                                               self.fixed_frame, self.tf_timeout)
+            tf = self.tf.lookup_transform(self.target_frame, self.box_frame, msg.header.stamp, self.tf_timeout)
             T = numpify(tf.transform)
             R, t = T[:3, :3], T[:3, 3:]
             x = np.matmul(R, x) + t
@@ -90,5 +81,6 @@ class BoxFilterNode(object):
 
 
 if __name__ == '__main__':
+    rospy.init_node('box_filter')
     node = BoxFilterNode()
     rospy.spin()
