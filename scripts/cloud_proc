@@ -7,6 +7,7 @@ from cloud_proc import configure_filters, FilterChain
 import rospy
 from ros_numpy import msgify, numpify
 from sensor_msgs.msg import PointCloud2
+from timeit import default_timer as timer
 
 
 class CloudProcNode(object):
@@ -17,13 +18,16 @@ class CloudProcNode(object):
         self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
 
     def cloud_cb(self, msg):
-        cloud = numpify(msg)
+        t0 = timer()
+        # Create a copy which can be modified in-place.
+        cloud = numpify(msg).copy()
         header = msg.header
         cloud, header = self.chain.filter(cloud, header)
         if cloud is not None:
             msg = msgify(PointCloud2, cloud)
             msg.header = header
             self.cloud_pub.publish(msg)
+        rospy.loginfo('Cloud processed (%.3f s).' % (timer() - t0))
 
 
 if __name__ == '__main__':

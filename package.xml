@@ -7,7 +7,8 @@
     <license>BSD</license>
     <!-- <url type="website">http://wiki.ros.org/cloud_proc</url> -->
     <author email="tpetricek@gmail.com">Tomas Petricek</author>
-    
+
+    <depend>geometry_msgs</depend>
     <depend>message_runtime</depend>
     <depend>nav_msgs</depend>
     <depend>rospy</depend>

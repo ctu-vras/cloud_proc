@@ -32,16 +32,21 @@ class OdomCloudTransformer(object):
 
     def cb(self, odom, input):
         t0 = timer()
-        assert not self.check_frames or odom.child_frame_id == input.header.frame_id
+        # if self.check_frames and odom.child_frame_id != input.header.frame_id:
+        if odom.child_frame_id != input.header.frame_id:
+            rospy.logwarn_throttle(5.0, 'Odometry child frame (%s) does not match point cloud frame (%s).'
+                                   % (odom.child_frame_id, input.header.frame_id))
+            if self.check_frames:
+                return
         tf = numpify(odom.pose.pose)
         cloud = numpify(input)
         cloud = transform(tf, cloud.copy(), self.fields, self.rotate)
         output = msgify(PointCloud2, cloud)
         output.header.stamp = input.header.stamp
         output.header.frame_id = odom.header.frame_id
-        rospy.loginfo('Cloud with %i points transformed to %s (%.3f s).',
-                      cloud.size, odom.header.frame_id, timer() - t0)
         self.cloud_pub.publish(output)
+        rospy.loginfo('%i points transformed to %s (%.3f s).',
+                      cloud.size, odom.header.frame_id, timer() - t0)
 
 
 if __name__ == '__main__':

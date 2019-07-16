@@ -50,6 +50,7 @@ class PassThrough(Filter):
 
 
 def transform(tf, cloud, fields=(('x', 'y', 'z'),), rotate=()):
+    """Transform cloud in-place."""
     if fields and isinstance(fields[0], str):
         fields = [fields]
     if rotate and isinstance(rotate[0], str):
@@ -86,6 +87,7 @@ class Transform(Filter):
         self.update_frame = update_frame
 
     def filter(self, cloud, header):
+        t0 = timer()
         try:
             tf = self.tf.lookup_transform(self.target_frame, header.frame_id, header.stamp, self.timeout)
         except TransformException as ex:
@@ -95,6 +97,8 @@ class Transform(Filter):
         cloud = transform(tf, cloud, fields=self.fields, rotate=self.rotate)
         if self.update_frame:
             header.frame_id = self.target_frame
+        rospy.loginfo('%i points transformed to %s (%.3f s).'
+                      % (cloud.size, self.target_frame, timer() - t0))
         return cloud, header
 
 
@@ -111,7 +115,10 @@ class Box(Filter):
             self.transform = PassThrough()
 
     def filter(self, cloud, header):
+        t0 = timer()
+        n0 = cloud.size
         cloud = cloud.ravel()
+        # Transform modifies the cloud: pass a copy.
         filter_cloud, _ = self.transform(cloud[self.fields].copy(), header)
         if filter_cloud is None:
             return None, None
@@ -123,6 +130,10 @@ class Box(Filter):
             keep &= (x <= self.upper).all(axis=0, keepdims=False)
         keep = keep if self.keep else ~keep
         cloud = cloud[keep]
+        n1 = cloud.size
+        if n1 < n0:
+            rospy.loginfo('%i (%.2f%%) points removed by box filter (%.3f s).'
+                          % (n0 - n1, 100 * (n0 - n1) / n0, timer() - t0))
         return cloud, header
 
 
@@ -155,15 +166,8 @@ class FilterChain(Filter):
         self.filters = list(filters)
 
     def filter(self, cloud, header):
-        t0 = timer()
         for i, f in enumerate(self.filters):
-            n0 = cloud.size
             cloud, header = f(cloud, header)
             if cloud is None:
-                rospy.loginfo('Cloud dropped in filter %s (%i).' % (f, i))
                 break
-            n1 = cloud.size
-            if n1 < n0:
-                rospy.loginfo('%i (%.2f%%) points removed by filter %s (%i).' % (n0 - n1, 100 * (n0 - n1) / n0, f, i))
-        rospy.loginfo('Cloud processed (%.3f s).' % (timer() - t0))
         return cloud, header
