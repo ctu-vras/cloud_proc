@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
+from geometry_msgs.msg import Transform, TransformStamped, Vector3
+from nav_msgs.msg import Odometry
+import rospy
+from tf2_ros import TransformBroadcaster
+
+
+def slots(msg):
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+class OdomToTfNode(object):
+
+    def __init__(self):
+        self.tf_pub = TransformBroadcaster()
+        self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb, queue_size=2)
+
+    def odom_cb(self, odom):
+        tf = TransformStamped(odom.header, odom.child_frame_id,
+                              Transform(Vector3(*slots(odom.pose.pose.position)),
+                                        odom.pose.pose.orientation))
+        self.tf_pub.sendTransform(tf)
+
+
+if __name__ == '__main__':
+    rospy.init_node('odom_tf')
+    node = OdomToTfNode()
+    rospy.spin()
