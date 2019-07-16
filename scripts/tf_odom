@@ -6,8 +6,8 @@ from nav_msgs.msg import Odometry
 import roslib
 from roslib.message import get_message_class
 import rospy
+from tf2_client import get_buffer
 from tf2_py import TransformException
-from tf2_ros import Buffer, TransformListener
 
 
 def deserialize(msg):
@@ -26,25 +26,21 @@ class TfToOdomNode(object):
     def __init__(self):
         rospy.init_node('tf_odom')
         self.parent_frame = rospy.get_param('~parent_frame', 'map')
+        rospy.loginfo('Parent frame: %s', self.parent_frame)
         self.child_frame = rospy.get_param('~child_frame', 'base_link')
+        rospy.loginfo('Child frame: %s', self.child_frame)
         self.timeout = rospy.Duration(rospy.get_param('~timeout', 0.0))
+        rospy.loginfo('Timeout: %s s', self.timeout.to_sec())
         self.timer_freq = rospy.get_param('~timer_freq', None)
-        self.log_config()
+        rospy.loginfo('Timer frequency: %s Hz', self.timer_freq)
 
         self.pose_pub = rospy.Publisher('pose', PoseStamped, queue_size=2)
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=2)
 
-        self.tf = Buffer(rospy.Duration(10.0))
-        self.tf_sub = TransformListener(self.tf)
+        self.tf = get_buffer()
         self.trigger_sub = rospy.Subscriber('trigger', rospy.AnyMsg, self.trigger_cb, queue_size=2)
         if self.timer_freq:
             self.timer = rospy.Timer(rospy.Duration(self.timer_freq), self.timer_cb)
-
-    def log_config(self):
-        rospy.loginfo('Parent frame: %s', self.parent_frame)
-        rospy.loginfo('Child frame: %s', self.child_frame)
-        rospy.loginfo('Timeout: %s s', self.timeout.to_sec())
-        rospy.loginfo('Timer frequency: %s Hz', self.timer_freq)
 
     def lookup_pose(self, stamp):
         tf = self.tf.lookup_transform(self.parent_frame, self.child_frame, stamp, self.timeout)
