@@ -33,6 +33,8 @@ class TfToOdomNode(object):
         rospy.loginfo('Timeout: %s s', self.timeout.to_sec())
         self.timer_freq = rospy.get_param('~timer_freq', None)
         rospy.loginfo('Timer frequency: %s Hz', self.timer_freq)
+        self.no_wait = rospy.get_param('~no_wait', False)
+        rospy.loginfo('Don\'t wait for transform (take last): %i', self.no_wait)
 
         self.pose_pub = rospy.Publisher('pose', PoseStamped, queue_size=2)
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=2)
@@ -43,6 +45,8 @@ class TfToOdomNode(object):
             self.timer = rospy.Timer(rospy.Duration(self.timer_freq), self.timer_cb)
 
     def lookup_pose(self, stamp):
+        if self.no_wait:
+            stamp = rospy.Time(0, 0)
         tf = self.tf.lookup_transform(self.parent_frame, self.child_frame, stamp, self.timeout)
         rospy.logdebug('%s position in %s: (%.3f, %.3f, %.3f)',
                        self.child_frame, self.parent_frame, *slots(tf.transform.translation))
