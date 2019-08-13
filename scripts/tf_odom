@@ -42,7 +42,7 @@ class TfToOdomNode(object):
         self.tf = get_buffer()
         self.trigger_sub = rospy.Subscriber('trigger', rospy.AnyMsg, self.trigger_cb, queue_size=2)
         if self.timer_freq:
-            self.timer = rospy.Timer(rospy.Duration(self.timer_freq), self.timer_cb)
+            self.timer = rospy.Timer(rospy.Duration(1.0 / self.timer_freq), self.timer_cb)
 
     def lookup_pose(self, stamp):
         if self.no_wait:
