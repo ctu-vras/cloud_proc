@@ -16,12 +16,15 @@ class CloudProcNode(object):
         self.chain = FilterChain(configure_filters(rospy.get_param('~filters', [])))
         self.cloud_pub = rospy.Publisher('out', PointCloud2, queue_size=2)
         self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
+        self.overwrite_in_frame = rospy.get_param('~overwrite_in_frame', None)
 
     def cloud_cb(self, msg):
         t0 = timer()
         # Create a copy which can be modified in-place.
         cloud = numpify(msg).copy()
         header = msg.header
+        if self.overwrite_in_frame is not None:
+            header.frame_id = self.overwrite_in_frame
         cloud, header = self.chain.filter(cloud, header)
         if cloud is not None:
             msg = msgify(PointCloud2, cloud)
