@@ -81,7 +81,7 @@ class Transform(Filter):
     def __init__(self, target_frame=None, fields=(('x', 'y', 'z'),), rotate=(), timeout=0.0, update_frame=True):
         self.tf = get_buffer()
         self.target_frame = target_frame
-        self.timeout = rospy.Duration(timeout)
+        self.timeout = rospy.Duration.from_sec(timeout)
         self.fields = fields
         self.rotate = rotate
         self.update_frame = update_frame
