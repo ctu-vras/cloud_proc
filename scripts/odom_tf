@@ -1,8 +1,14 @@
 #!/usr/bin/env python
+"""
+Odometry-to-tf converter.
+"""
 from __future__ import absolute_import, division, print_function
-from geometry_msgs.msg import Transform, TransformStamped, Vector3
+from geometry_msgs.msg import Pose, Transform, TransformStamped, Vector3
 from nav_msgs.msg import Odometry
+import numpy as np
 import rospy
+from ros_numpy import msgify, numpify
+from tf2_client import clear, get_buffer
 from tf2_ros import TransformBroadcaster
 
 
@@ -14,9 +20,38 @@ class OdomToTfNode(object):
 
     def __init__(self):
         self.tf_pub = TransformBroadcaster()
-        self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb, queue_size=2)
+        # Allow custom robot frame, for which the partial transform can be
+        # computed from the tf tree.
+        self.robot_frame = rospy.get_param('~robot_frame', None)
+        if self.robot_frame:
+            rospy.loginfo('Using custom robot frame: %s', self.robot_frame)
+            self.tf = get_buffer()
+            self.tf_cr = None
+            self.reuse_tf = rospy.get_param('~reuse_tf', False)
+            if self.reuse_tf:
+                rospy.loginfo('Lookup transform once and reuse.')
+        self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb)
+
+    def robot_odom(self, odom):
+        if not self.robot_frame:
+            return odom
+        if not self.reuse_tf or self.tf_cr is None:
+            tf_cr = self.tf.lookup_transform(odom.child_frame_id, self.robot_frame, odom.header.stamp,
+                                             timeout=rospy.Duration.from_sec(1.0))
+            self.tf_cr = numpify(tf_cr.transform)
+            # Clear any listeners or buffers as they are not needed anymore.
+            if self.reuse_tf:
+                self.tf = None
+                clear()
+        tf_oc = numpify(odom.pose.pose)
+        tf_or = np.matmul(tf_oc, self.tf_cr)
+        odom.child_frame_id = self.robot_frame
+        odom.pose.pose = msgify(Pose, tf_or)
+        # TODO: Transform other fields if needed.
+        return odom
 
     def odom_cb(self, odom):
+        odom = self.robot_odom(odom)
         tf = TransformStamped(odom.header, odom.child_frame_id,
                               Transform(Vector3(*slots(odom.pose.pose.position)),
                                         odom.pose.pose.orientation))
