@@ -20,6 +20,10 @@ class OdomToTfNode(object):
 
     def __init__(self):
         self.tf_pub = TransformBroadcaster()
+        # Rename parent frame if custom odom frame is specified.
+        self.odom_frame = rospy.get_param('~odom_frame', None)
+        if self.odom_frame:
+            rospy.loginfo('Using custom odom frame: %s', self.odom_frame)
         # Allow custom robot frame, for which the partial transform can be
         # computed from the tf tree.
         self.robot_frame = rospy.get_param('~robot_frame', None)
@@ -30,9 +34,12 @@ class OdomToTfNode(object):
             self.reuse_tf = rospy.get_param('~reuse_tf', False)
             if self.reuse_tf:
                 rospy.loginfo('Lookup transform once and reuse.')
+        self.odom_pub = rospy.Publisher('odom_new', Odometry, queue_size=2)
         self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb)
 
     def robot_odom(self, odom):
+        if self.odom_frame:
+            odom.header.frame_id = self.odom_frame
         if not self.robot_frame:
             return odom
         if not self.reuse_tf or self.tf_cr is None:
@@ -52,6 +59,8 @@ class OdomToTfNode(object):
 
     def odom_cb(self, odom):
         odom = self.robot_odom(odom)
+        if self.odom_pub.get_num_connections() > 0:
+            self.odom_pub.publish(odom)
         tf = TransformStamped(odom.header, odom.child_frame_id,
                               Transform(Vector3(*slots(odom.pose.pose.position)),
                                         odom.pose.pose.orientation))
