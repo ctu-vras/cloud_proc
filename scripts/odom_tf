@@ -19,6 +19,8 @@ def slots(msg):
 class OdomToTfNode(object):
 
     def __init__(self):
+        self.stamp = rospy.get_param('~stamp', False)
+        self.time_offset = rospy.Duration.from_sec(rospy.get_param('~time_offset', 0.0))
         self.max_age = rospy.get_param('~max_age', 1.0)
         # Rename parent frame if custom odom frame is specified.
         self.odom_frame = rospy.get_param('~odom_frame', None)
@@ -40,6 +42,9 @@ class OdomToTfNode(object):
         self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb)
 
     def robot_odom(self, odom):
+        if self.stamp:
+            odom.header.stamp = rospy.Time.now()
+        odom.header.stamp += self.time_offset
         if (rospy.Time.now() - odom.header.stamp).to_sec() > self.max_age:
             rospy.logwarn('Odometry message older than %.3f s skipped.', self.max_age)
         if self.odom_frame:
