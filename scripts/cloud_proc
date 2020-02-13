@@ -14,8 +14,19 @@ class CloudProcNode(object):
 
     def __init__(self):
         self.chain = FilterChain(configure_filters(rospy.get_param('~filters', [])))
-        self.cloud_pub = rospy.Publisher('out', PointCloud2, queue_size=2)
-        self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, queue_size=2)
+        out_queue_size = rospy.get_param('~out_queue_size', 5)
+        in_queue_size = rospy.get_param('~in_queue_size', 5)
+        in_buff_size = rospy.get_param('~in_buff_size', 65536)
+        pub_kw = {}
+        if out_queue_size > 0:
+            pub_kw['queue_size'] = out_queue_size
+        sub_kw = {}
+        if in_queue_size > 0:
+            sub_kw['queue_size'] = in_queue_size
+        if in_buff_size > 0:
+            sub_kw['buff_size'] = in_buff_size
+        self.cloud_pub = rospy.Publisher('out', PointCloud2, **pub_kw)
+        self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, **sub_kw)
         self.overwrite_in_frame = rospy.get_param('~overwrite_in_frame', None)
 
     def cloud_cb(self, msg):
