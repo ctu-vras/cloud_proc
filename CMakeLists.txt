@@ -1,31 +1,39 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.10)
 project(cloud_proc)
 
-find_package(catkin REQUIRED
-    COMPONENTS
-        geometry_msgs
-        message_runtime
-        nav_msgs
-        rospy
-        sensor_msgs
-        tf2
-        tf2_ros
-        tf2_sensor_msgs
+set(CMAKE_CXX_STANDARD 17)
+
+find_package(catkin REQUIRED COMPONENTS
+  class_loader
+  cras_cpp_common
+  nodelet
+  pcl_ros
+  subt_diagnostics
 )
 
 catkin_python_setup()
 
 catkin_package(
-    CATKIN_DEPENDS
-        geometry_msgs
-        message_runtime
-        nav_msgs
-        rospy
-        sensor_msgs
-        tf2
-        tf2_ros
-        tf2_sensor_msgs
+  INCLUDE_DIRS include
+  LIBRARIES improved_pcl_filter pcl_crop_box_fixed
+  CATKIN_DEPENDS nodelet pcl_ros
 )
+
+include_directories(include)
+include_directories(${catkin_INCLUDE_DIRS})
+
+add_library(pcl_crop_box_fixed src/PclCropBoxFixed.cpp)
+target_link_libraries(pcl_crop_box_fixed ${catkin_LIBRARIES})
+add_dependencies(pcl_crop_box_fixed ${catkin_EXPORTED_TARGETS})
+
+add_library(improved_pcl_filter src/ImprovedPclFilter.cpp)
+target_link_libraries(improved_pcl_filter ${catkin_LIBRARIES})
+add_dependencies(improved_pcl_filter ${catkin_EXPORTED_TARGETS})
+
+add_library(improved_pcl_filters src/ImprovedPclFilters.cpp)
+target_link_libraries(improved_pcl_filters improved_pcl_filter pcl_crop_box_fixed ${catkin_LIBRARIES})
+add_dependencies(improved_pcl_filters ${catkin_EXPORTED_TARGETS})
+class_loader_hide_library_symbols(improved_pcl_filters)
 
 catkin_install_python(
     PROGRAMS
@@ -36,3 +44,17 @@ catkin_install_python(
         scripts/tf_odom
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+
+install(TARGETS improved_pcl_filter improved_pcl_filters pcl_crop_box_fixed
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
+
+install(FILES nodelets.xml DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+
+install(DIRECTORY include/${PROJECT_NAME}/
+    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+    FILES_MATCHING REGEX ".*\\.hp?p?$"
+)
+
+

@@ -1,0 +1,12 @@
+<library path="lib/libimproved_pcl_filters">
+    <class name="cloud_proc/CropBoxImproved" type="cloud_proc::CropBox" base_class_type="nodelet::Nodelet">
+        <description>
+            Nodelet for running the improved CropBox nodelet.
+        </description>
+    </class>
+    <class name="cloud_proc/PassThroughImproved" type="cloud_proc::PassThrough" base_class_type="nodelet::Nodelet">
+        <description>
+            Nodelet for running the improved PassThrough nodelet.
+        </description>
+    </class>
+</library>

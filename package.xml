@@ -7,15 +7,27 @@
     <license>BSD</license>
     <!-- <url type="website">http://wiki.ros.org/cloud_proc</url> -->
     <author email="tpetricek@gmail.com">Tomas Petricek</author>
+    <author email="peckama2@fel.cvut.cz">Martin Pecka</author>
 
-    <depend>geometry_msgs</depend>
-    <depend>message_runtime</depend>
-    <depend>nav_msgs</depend>
-    <depend>rospy</depend>
-    <depend>sensor_msgs</depend>
-    <depend>tf2</depend>
-    <depend>tf2_ros</depend>
-    <depend>tf2_sensor_msgs</depend>
+    <depend>cras_cpp_common</depend>
+    <depend>pcl_ros</depend>
+    <depend>nodelet</depend>
+    <depend>subt_diagnostics</depend>
+
+    <build_depend>class_loader</build_depend>
+
+    <exec_depend>geometry_msgs</exec_depend>
+    <exec_depend>message_runtime</exec_depend>
+    <exec_depend>nav_msgs</exec_depend>
+    <exec_depend>rospy</exec_depend>
+    <exec_depend>sensor_msgs</exec_depend>
+    <exec_depend>tf2</exec_depend>
+    <exec_depend>tf2_ros</exec_depend>
+    <exec_depend>tf2_sensor_msgs</exec_depend>
     
     <buildtool_depend>catkin</buildtool_depend>
+
+    <export>
+        <nodelet plugin="${prefix}/nodelets.xml" />
+    </export>
 </package>
