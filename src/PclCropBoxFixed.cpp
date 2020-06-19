@@ -3,7 +3,7 @@
 
 void cloud_proc::CropBoxPointCloud2::applyFilter(pcl::PCLPointCloud2 &output)
 {
-  if (!this->keep_organized_) {
+  if (!this->keep_organized_ || (this->input_->height == 1 && this->input_->is_dense)) {
     pcl::CropBox<pcl::PCLPointCloud2>::applyFilter(output);
   } else {
     // this is basically a copy-paste from
