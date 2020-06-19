@@ -46,7 +46,6 @@ protected:
   std::string fixedFrame;
   std::unordered_map<std::string, cras::CloudChannelType> transformChannels;
 
-  diagnostic_updater::ImprovedUpdater diagUpdater;
   std::unique_ptr<diagnostic_updater::SlowDiagnosedPublisher<sensor_msgs::PointCloud2>> pubOutputDiag;
   std::unique_ptr<diagnostic_updater::SlowTopicDiagnostic> inputDiag;
   ros::Timer diagTimer;

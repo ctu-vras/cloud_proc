@@ -149,7 +149,7 @@ void ImprovedFilter::onInit()
         this->minAcceptableReceiveDelay, this->maxAcceptableReceiveDelay);
 
     this->inputDiag = std::make_unique<diagnostic_updater::SlowTopicDiagnostic>(
-        this->pnh_->resolveName("input"), this->diagUpdater, receiveFrequency,
+        this->pnh_->resolveName("input"), this->getDiagUpdater(), receiveFrequency,
         receiveDelays);
 
     const auto publishFrequency = diagnostic_updater::FrequencyStatusParam(
@@ -159,15 +159,15 @@ void ImprovedFilter::onInit()
         this->minAcceptablePublishDelay, this->maxAcceptablePublishDelay);
 
     this->pubOutputDiag = std::make_unique<diagnostic_updater::SlowDiagnosedPublisher<PointCloud2>>(
-        this->pub_output_, this->diagUpdater, publishFrequency, publishDelays);
+        this->pub_output_, this->getDiagUpdater(), publishFrequency, publishDelays);
 
     if (produceDiagnostics)
     {
-        diagUpdater.add("TF", this, &ImprovedFilter::produceTfDiag);
+        this->getDiagUpdater().add("TF", this, &ImprovedFilter::produceTfDiag);
 
         this->diagTimer = this->pnh_->createTimer(ros::Duration(1.0),
                                                   [this](const ros::TimerEvent&) {
-                                                    this->diagUpdater.update();
+                                                    this->getDiagUpdater().update();
                                                   });
     }
 
