@@ -4,6 +4,7 @@
 #undef private
 
 #include <cloud_proc/ImprovedPclFilter.h>
+#include <cras_cpp_common/type_utils.hpp>
 
 namespace cloud_proc
 {
@@ -57,8 +58,10 @@ void ImprovedFilter::onInit()
     // Call the super onInit ()
     PCLNodelet::onInit();  // NOLINT
 
+    auto privateParam = this->forNodeHandle(*this->pnh_);
+
     // workaround for https://github.com/ros-perception/perception_pcl/issues/283
-    const auto disableOrigTfListener = this->getParam(*this->pnh_, "disable_orig_tf_listener", true);
+    const auto disableOrigTfListener = privateParam->getParam("disable_orig_tf_listener", true);
     {
         const auto cacheLength = this->tf_listener_.getCacheLength();
         this->tf_listener_.~TransformListener();
@@ -82,17 +85,16 @@ void ImprovedFilter::onInit()
     }
 
     // params
+    const auto receiveRate = privateParam->getParam("receive_rate", 0.0, "s");
+    this->minReceiveRate = privateParam->getParam("receive_rate_min", receiveRate, "s");
+    this->maxReceiveRate = privateParam->getParam("receive_rate_max", receiveRate, "s");
 
-    const auto receiveRate = this->getParam(*this->pnh_, "receive_rate", 0.0, "s");
-    this->minReceiveRate = this->getParam(*this->pnh_, "receive_rate_min", receiveRate, "s");
-    this->maxReceiveRate = this->getParam(*this->pnh_, "receive_rate_max", receiveRate, "s");
+    const auto publishRate = privateParam->getParam("publish_rate", receiveRate, "s");
+    this->minPublishRate = privateParam->getParam("publish_rate_min", publishRate, "s");
+    this->maxPublishRate = privateParam->getParam("publish_rate_max", publishRate, "s");
 
-    const auto publishRate = this->getParam(*this->pnh_, "publish_rate", receiveRate, "s");
-    this->minPublishRate = this->getParam(*this->pnh_, "publish_rate_min", publishRate, "s");
-    this->maxPublishRate = this->getParam(*this->pnh_, "publish_rate_max", publishRate, "s");
-
-    this->publishPeriodically = this->getParam(*this->pnh_, "publish_periodically", false);
-    this->fixedFrame = this->getParam(*this->pnh_, "fixed_frame", "");
+    this->publishPeriodically = privateParam->getParam("publish_periodically", false);
+    this->fixedFrame = privateParam->getParam("fixed_frame", "");
 
     if (this->publishPeriodically && this->fixedFrame.empty())
     {
@@ -107,24 +109,22 @@ void ImprovedFilter::onInit()
         return;
     }
 
-    this->tfWaitTimeout = this->getParam(*this->pnh_, "tf_wait_timeout", ros::Duration(1), "s");
+    this->tfWaitTimeout = privateParam->getParam("tf_wait_timeout", ros::Duration(1), "s");
 
-    const auto produceDiagnostics = this->getParam(*this->pnh_, "produce_diagnostics", true);
+    const auto produceDiagnostics = privateParam->getParam("produce_diagnostics", true);
 
-    this->receiveRateTolerance = this->getParam(*this->pnh_, "receive_rate_tolerance", 0.1);
-    this->publishRateTolerance = this->getParam(*this->pnh_, "publish_rate_tolerance", 0.1);
-    this->receiveRateWindowSize = this->getParam(*this->pnh_, "receive_rate_window_size",
-                                                 static_cast<size_t>(5), "updates");
-    this->publishRateWindowSize = this->getParam(*this->pnh_, "publish_rate_window_size",
-                                                 static_cast<size_t>(5), "updates");
+    this->receiveRateTolerance = privateParam->getParam("receive_rate_tolerance", 0.1);
+    this->publishRateTolerance = privateParam->getParam("publish_rate_tolerance", 0.1);
+    this->receiveRateWindowSize = privateParam->getParam("receive_rate_window_size", 5_sz, "updates");
+    this->publishRateWindowSize = privateParam->getParam("publish_rate_window_size", 5_sz, "updates");
 
-    this->minAcceptableReceiveDelay = this->getParam(*this->pnh_, "min_acceptable_receive_delay", -1.0, "s");
-    this->maxAcceptableReceiveDelay = this->getParam(*this->pnh_, "max_acceptable_receive_delay", 5.0, "s");
-    this->minAcceptablePublishDelay = this->getParam(*this->pnh_, "min_acceptable_publish_delay", -1.0, "s");
-    this->maxAcceptablePublishDelay = this->getParam(*this->pnh_, "max_acceptable_publish_delay", 5.0, "s");
+    this->minAcceptableReceiveDelay = privateParam->getParam("min_acceptable_receive_delay", -1.0, "s");
+    this->maxAcceptableReceiveDelay = privateParam->getParam("max_acceptable_receive_delay", 5.0, "s");
+    this->minAcceptablePublishDelay = privateParam->getParam("min_acceptable_publish_delay", -1.0, "s");
+    this->maxAcceptablePublishDelay = privateParam->getParam("max_acceptable_publish_delay", 5.0, "s");
 
-    const auto transformChannelsPoint = this->getParam(*this->pnh_, "transform_channels_point", std::vector<std::string>({"vp_"}));
-    const auto transformChannelsDirection = this->getParam(*this->pnh_, "transform_channels_direction", std::vector<std::string>({"normal_"}));
+    const auto transformChannelsPoint = privateParam->getParam("transform_channels_point", std::vector<std::string>({"vp_"}));
+    const auto transformChannelsDirection = privateParam->getParam("transform_channels_direction", std::vector<std::string>({"normal_"}));
     for (const auto& channel : transformChannelsPoint)
       this->transformChannels[channel] = cras::CloudChannelType::POINT;
     for (const auto& channel : transformChannelsDirection)
@@ -179,6 +179,7 @@ void ImprovedFilter::onInit()
 
     NODELET_DEBUG("[%s::onInit] Nodelet successfully created.", this->getName().c_str());
 }
+
 void ImprovedFilter::input_indices_callback(const sensor_msgs::PointCloud2_<std::allocator<void>>::ConstPtr& cloud,
                                             const ImprovedFilter::PointIndicesConstPtr& indices)
 {
