@@ -58,7 +58,7 @@ void ImprovedFilter::onInit()
     // Call the super onInit ()
     PCLNodelet::onInit();  // NOLINT
 
-    auto privateParam = this->forNodeHandle(*this->pnh_);
+    auto privateParam = this->paramsForNodeHandle(*this->pnh_);
 
     // workaround for https://github.com/ros-perception/perception_pcl/issues/283
     const auto disableOrigTfListener = privateParam->getParam("disable_orig_tf_listener", true);
@@ -85,14 +85,6 @@ void ImprovedFilter::onInit()
     }
 
     // params
-    const auto receiveRate = privateParam->getParam("receive_rate", 0.0, "s");
-    this->minReceiveRate = privateParam->getParam("receive_rate_min", receiveRate, "s");
-    this->maxReceiveRate = privateParam->getParam("receive_rate_max", receiveRate, "s");
-
-    const auto publishRate = privateParam->getParam("publish_rate", receiveRate, "s");
-    this->minPublishRate = privateParam->getParam("publish_rate_min", publishRate, "s");
-    this->maxPublishRate = privateParam->getParam("publish_rate_max", publishRate, "s");
-
     this->publishPeriodically = privateParam->getParam("publish_periodically", false);
     this->fixedFrame = privateParam->getParam("fixed_frame", "");
 
@@ -102,26 +94,10 @@ void ImprovedFilter::onInit()
                       this->getName().c_str());
         return;
     }
-    if (this->publishPeriodically && publishRate == 0.0)
-    {
-        NODELET_ERROR("[%s::onInit] For periodic publishing, a non-zero publish_rate has to be set",
-                      this->getName().c_str());
-        return;
-    }
 
     this->tfWaitTimeout = privateParam->getParam("tf_wait_timeout", ros::Duration(1), "s");
 
     const auto produceDiagnostics = privateParam->getParam("produce_diagnostics", true);
-
-    this->receiveRateTolerance = privateParam->getParam("receive_rate_tolerance", 0.1);
-    this->publishRateTolerance = privateParam->getParam("publish_rate_tolerance", 0.1);
-    this->receiveRateWindowSize = privateParam->getParam("receive_rate_window_size", 5_sz, "updates");
-    this->publishRateWindowSize = privateParam->getParam("publish_rate_window_size", 5_sz, "updates");
-
-    this->minAcceptableReceiveDelay = privateParam->getParam("min_acceptable_receive_delay", -1.0, "s");
-    this->maxAcceptableReceiveDelay = privateParam->getParam("max_acceptable_receive_delay", 5.0, "s");
-    this->minAcceptablePublishDelay = privateParam->getParam("min_acceptable_publish_delay", -1.0, "s");
-    this->maxAcceptablePublishDelay = privateParam->getParam("max_acceptable_publish_delay", 5.0, "s");
 
     const auto transformChannelsPoint = privateParam->getParam("transform_channels_point", std::vector<std::string>({"vp_"}));
     const auto transformChannelsDirection = privateParam->getParam("transform_channels_direction", std::vector<std::string>({"normal_"}));
@@ -141,39 +117,27 @@ void ImprovedFilter::onInit()
     }
 
     // diagnostics
+    this->inputDiag = std::make_unique<cras::TopicDiagnostic>(
+        this->pnh_->resolveName("input"), this->getDiagUpdater(), privateParam->paramsInNamespace("receive"));
+    this->pubOutputDiag = std::make_unique<cras::DiagnosedPublisher<PointCloud2>>(
+        this->pub_output_, this->getDiagUpdater(), privateParam->paramsInNamespace("publish"));
 
-    const auto receiveFrequency = diagnostic_updater::FrequencyStatusParam(
-        &this->minReceiveRate, &this->maxReceiveRate,
-        this->receiveRateTolerance, this->receiveRateWindowSize);
-    const auto receiveDelays = diagnostic_updater::TimeStampStatusParam(
-        this->minAcceptableReceiveDelay, this->maxAcceptableReceiveDelay);
-
-    this->inputDiag = std::make_unique<diagnostic_updater::SlowTopicDiagnostic>(
-        this->pnh_->resolveName("input"), this->getDiagUpdater(), receiveFrequency,
-        receiveDelays);
-
-    const auto publishFrequency = diagnostic_updater::FrequencyStatusParam(
-        &this->minPublishRate, &this->maxPublishRate,
-        this->publishRateTolerance, this->publishRateWindowSize);
-    const auto publishDelays = diagnostic_updater::TimeStampStatusParam(
-        this->minAcceptablePublishDelay, this->maxAcceptablePublishDelay);
-
-    this->pubOutputDiag = std::make_unique<diagnostic_updater::SlowDiagnosedPublisher<PointCloud2>>(
-        this->pub_output_, this->getDiagUpdater(), publishFrequency, publishDelays);
+    if (this->publishPeriodically && this->pubOutputDiag->getDesiredRate().expectedCycleTime() == ros::Duration(-1))
+    {
+        NODELET_ERROR("[%s::onInit] For periodic publishing, publish/rate has to be set",
+                      this->getName().c_str());
+        return;
+    }
 
     if (produceDiagnostics)
     {
         this->getDiagUpdater().add("TF", this, &ImprovedFilter::produceTfDiag);
-
-        this->diagTimer = this->pnh_->createTimer(ros::Duration(1.0),
-                                                  [this](const ros::TimerEvent&) {
-                                                    this->getDiagUpdater().update();
-                                                  });
+        this->startDiagTimer(*this->pnh_);
     }
 
-    if (this->publishPeriodically && publishRate > 1e-6)
+    if (this->publishPeriodically && this->pubOutputDiag->getDesiredRate().expectedCycleTime().toSec() > 1e-6)
     {
-        this->periodicPublishTimer = this->pnh_->createTimer(ros::Duration(ros::Rate(publishRate)),
+        this->periodicPublishTimer = this->pnh_->createTimer(this->pubOutputDiag->getDesiredRate(),
             &ImprovedFilter::periodicComputePublish, this);
     }
 

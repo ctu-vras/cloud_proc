@@ -4,9 +4,10 @@
 #include <pcl_ros/transforms.h>
 
 #include <diagnostic_updater/publisher.h>
-#include <subt_diagnostics/SlowTopicDiagUpdater.h>
-#include <subt_diagnostics/ImprovedUpdater.h>
+#include <cras_cpp_common/diagnostics/SlowTopicDiagUpdater.h>
+#include <cras_cpp_common/diagnostics/ImprovedUpdater.h>
 
+#include <cras_cpp_common/diag_utils.hpp>
 #include <cras_cpp_common/nodelet_utils.hpp>
 #include <cras_cpp_common/tf2_sensor_msgs.h>
 
@@ -38,17 +39,12 @@ protected:
 
   ros::Duration tfWaitTimeout;
 
-  double minReceiveRate;
-  double maxReceiveRate;
-  double minPublishRate;
-  double maxPublishRate;
   bool publishPeriodically;
   std::string fixedFrame;
   std::unordered_map<std::string, cras::CloudChannelType> transformChannels;
 
-  std::unique_ptr<diagnostic_updater::SlowDiagnosedPublisher<sensor_msgs::PointCloud2>> pubOutputDiag;
-  std::unique_ptr<diagnostic_updater::SlowTopicDiagnostic> inputDiag;
-  ros::Timer diagTimer;
+  std::unique_ptr<cras::DiagnosedPublisher<sensor_msgs::PointCloud2>> pubOutputDiag;
+  std::unique_ptr<cras::TopicDiagnostic> inputDiag;
   mutable bool diagHasTfProblems = false;
   double receiveRateTolerance;
   double publishRateTolerance;
