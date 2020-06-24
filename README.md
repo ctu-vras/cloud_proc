@@ -150,7 +150,7 @@ Parameters:
    - `keep_organized`: If true, organized pointclouds will be output as organized again (filtered values will be set to `NaN`).
  - Improved filter - periodic publishing:
    - `publish_periodically`: If true, the filter will publish pointclouds transformed at the current time on rate
-     `publish_rate`. When a cloud comes in, it is converted to `input_frame` and stored. When the publication timer
+     `publish/rate/desired`. When a cloud comes in, it is converted to `input_frame` and stored. When the publication timer
      triggers, the stored cloud is converted to `input_frame` at current time using the given `fixed_frame`. Then the
      filter is applied, the pointcloud is converted to the `output_frame` and published.
    - `fixed_frame`: Only needed when `publish_periodically` is true. See the description above.
@@ -167,18 +167,19 @@ Parameters:
    - `transform_channels_direction`: List of prefixes of channels to be transformed as vectors or directions (only
      rotation). If channel consists of `normal_x`, `normal_y` and `normal_z`, pass only `normal_` as the parameter here.
  - Improved filter - diagnostics:
-   - There are two identical sets of settings, one for the subscriber (input pointclouds, param prefix `receive_`), and
-     one for the publisher (output pointclouds, param prefix `publish_`). We describe them here generically with prefix '*'.
+   - There are two identical sets of settings, one for the subscriber (input pointclouds, param namespace `receive/`), and
+     one for the publisher (output pointclouds, param namespace `publish/`). We describe them here generically with prefix '*'.
    - `diagnostic_period`: How often the diagnostics should be published. Only whole seconds are supported.
-   - `*_rate`: The expected publishing/receiving rate. `publish_rate` is also used to configure the periodic publishing.
-   - `*_rate_min`/`*_rate_max`: The minimum/maximum expected publishing/receiving rate. If `*_rate` is set,
+   - `*/rate/desired`: The expected publishing/receiving rate. `publish/rate/desired` is also used to configure the
+     periodic publishing.
+   - `*/rate/min`/`*/rate/max`: The minimum/maximum expected publishing/receiving rate. If `*_rate` is set,
      it is used as a default value for these two.
-   - `*_rate_tolerance`: Real min rate is (`*_rate_min` * (1-tolerance)), real max rate is (`*_rate_max` * (1+tolerance)).
-   - `*_rate_window_size`: For how many updates (called once in `diagnostic_period`) should the topic statistics be
+   - `*/rate/tolerance`: Real min rate is (`*/rate/min` * (1-tolerance)), real max rate is (`*/rate/max` * (1+tolerance)).
+   - `*/rate/window_size`: For how many updates (called once in `diagnostic_period`) should the topic statistics be
      stored. If you set the window too small, the computed rates will have high variance. Also, consider setting this to
      a higher value when the expected rate of the topic is lower than 1.
-   - `min_acceptable_*_delay`/`max_acceptable_*_delay`: Min/max allowed difference between current time and time in the
-     processed message's header.
+   - `*/delay/min`/`*/delay/max`: Min/max allowed difference between current time and time in the processed message's
+     header.
      
 ### PassThrough (ImprovedFilter)
 
