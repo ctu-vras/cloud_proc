@@ -61,6 +61,7 @@ protected:
 
 public:
   ImprovedFilter();
+  ~ImprovedFilter() override {}  // correctly delete the unique_ptrs
 
 protected:
 
