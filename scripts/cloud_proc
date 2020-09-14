@@ -12,22 +12,50 @@ from timeit import default_timer as timer
 
 class CloudProcNode(object):
 
+    class SubListener(rospy.SubscribeListener):
+
+        def __init__(self, node):
+            assert isinstance(node, CloudProcNode)
+            self._node = node
+
+        def peer_subscribe(self, topic_name, topic_publish, peer_publish):
+            self._node.subscribe()
+
+        def peer_unsubscribe(self, topic_name, num_peers):
+            if num_peers == 0:
+                self._node.unsubscribe()
+
     def __init__(self):
         self.chain = FilterChain(configure_filters(rospy.get_param('~filters', [])))
         out_queue_size = rospy.get_param('~out_queue_size', 5)
         in_queue_size = rospy.get_param('~in_queue_size', 5)
         in_buff_size = rospy.get_param('~in_buff_size', 65536)
+        lazy_subscription = rospy.get_param('~lazy_subscription', False)
         pub_kw = {}
         if out_queue_size > 0:
             pub_kw['queue_size'] = out_queue_size
-        sub_kw = {}
+        self.sub_kw = {}
         if in_queue_size > 0:
-            sub_kw['queue_size'] = in_queue_size
+            self.sub_kw['queue_size'] = in_queue_size
         if in_buff_size > 0:
-            sub_kw['buff_size'] = in_buff_size
-        self.cloud_pub = rospy.Publisher('out', PointCloud2, **pub_kw)
-        self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, **sub_kw)
+            self.sub_kw['buff_size'] = in_buff_size
         self.overwrite_in_frame = rospy.get_param('~overwrite_in_frame', None)
+        self.sub_listener = CloudProcNode.SubListener(self) if lazy_subscription else None
+        self.cloud_pub = rospy.Publisher('out', PointCloud2, subscriber_listener=self.sub_listener, **pub_kw)
+        self.cloud_sub = None
+        if not lazy_subscription:
+            self.subscribe()
+
+    def subscribe(self):
+        if self.cloud_sub is None:
+            self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_cb, **self.sub_kw)
+            rospy.loginfo("Subscribed to " + rospy.resolve_name('in'))
+
+    def unsubscribe(self):
+        if self.cloud_sub is not None:
+            rospy.loginfo("Unsubscribing from " + rospy.resolve_name('in'))
+            self.cloud_sub.unregister()
+            self.cloud_sub = None
 
     def cloud_cb(self, msg):
         t0 = timer()
