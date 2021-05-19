@@ -1,0 +1,189 @@
+#!/usr/bin/env python
+"""
+Point cloud assembler.
+"""
+from __future__ import absolute_import, division, print_function
+from cloud_proc import transform
+from geometry_msgs.msg import TransformStamped
+import numpy as np
+import rospy
+from ros_numpy import msgify, numpify
+from sensor_msgs.msg import PointCloud2
+import tf2_client
+from tf2_ros import Buffer, TransformException
+from timeit import default_timer as timer
+from threading import RLock
+
+
+def slots(msg):
+    """Return message attributes (slots) as list."""
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+def array(msg):
+    """Return message attributes (slots) as array."""
+    return np.array(slots(msg))
+
+
+class CloudAssembler(rospy.SubscribeListener):
+
+    def __init__(self):
+        super(CloudAssembler, self).__init__()
+
+        self.fixed_frame = rospy.get_param('~fixed_frame', 'odom')
+        if not self.fixed_frame:
+            rospy.logwarn('Fixed frame not specified, using the first cloud in batch.')
+        self.target_frame = rospy.get_param('~target_frame', None)
+        if not self.target_frame:
+            rospy.loginfo('Target frame not specified, using the first cloud in batch.')
+        self.max_age = rospy.get_param('~max_age', None)
+        self.max_clouds = rospy.get_param('~max_clouds', 1)
+        self.max_delay = rospy.get_param('~max_delay', 1.0)
+        self.max_translation = rospy.get_param('~max_translation', 0.01)
+        self.max_rotation = rospy.get_param('~max_rotation', 0.01)
+
+        in_queue_size = rospy.get_param('~in_queue_size', None)
+        in_buff_size = rospy.get_param('~in_buff_size', None)
+        out_queue_size = rospy.get_param('~out_queue_size', 2)
+        self.tf_timeout = rospy.Duration.from_sec(rospy.get_param('~tf_timeout', 1.0))
+
+        # Cloud buffer.
+        self.msgs = []
+        self.msgs_lock = RLock()
+
+        self.tf = tf2_client.get_buffer()
+        assert isinstance(self.tf, Buffer)
+
+        self.sub_kw = {}
+        if in_queue_size is not None:
+            sub_kw['queue_size'] = in_queue_size
+        if in_buff_size is not None:
+            sub_kw['buff_size'] = in_buff_size
+        # Wait for subscribers to subscribe.
+        self.cloud_sub = None
+
+        pub_kw = {}
+        if out_queue_size is not None:
+            pub_kw['queue_size'] = out_queue_size
+        self.cloud_pub = rospy.Publisher('out', PointCloud2, subscriber_listener=self, **pub_kw)
+
+    def peer_subscribe(self, topic_name, topic_publish, peer_publish):
+        with self.msgs_lock:
+            if self.cloud_sub is None:
+                self.cloud_sub = rospy.Subscriber('in', PointCloud2, self.cloud_received_safe, **self.sub_kw)
+                rospy.loginfo('Subscribed to %s.' % rospy.resolve_name('in'))
+
+    def peer_unsubscribe(self, topic_name, num_peers):
+        if num_peers == 0:
+            with self.msgs_lock:
+                self.msgs = []
+                self.cloud_sub.unregister()
+                self.cloud_sub = None
+                rospy.loginfo('Unsubscribed from %s.' % rospy.resolve_name('in'))
+
+    def assemble_and_publish(self):
+        t = timer()
+        with self.msgs_lock:
+            assert self.msgs
+            fixed_frame = self.fixed_frame or self.msgs[0].header.frame_id
+            target_frame = self.target_frame or self.msgs[0].header.frame_id
+            clouds = []
+            for msg in self.msgs:
+                tf = self.tf.lookup_transform_full(target_frame,
+                                                   self.msgs[0].header.stamp,
+                                                   msg.header.frame_id,
+                                                   msg.header.stamp,
+                                                   fixed_frame,
+                                                   self.tf_timeout)
+                assert isinstance(tf, TransformStamped)
+                tf = numpify(tf.transform)
+                cloud = numpify(msg)
+                cloud = transform(tf, cloud.copy())
+                clouds.append(cloud)
+
+            # TODO: Handle incompatible fields.
+            # TODO: Handle incompatible sizes at first dim.
+            cloud = np.concatenate(clouds)
+            msg = msgify(PointCloud2, cloud)
+            msg.header.frame_id = target_frame
+            msg.header.stamp = self.msgs[0].header.stamp
+            n = len(self.msgs)
+            self.msgs = []
+
+        self.cloud_pub.publish(msg)
+        rospy.loginfo('%i points from %i clouds assembled and published (%.3f s).'
+                      % (msg.height * msg.width, n, timer() - t))
+
+    def should_append(self, msg):
+        assert isinstance(msg, PointCloud2)
+        with self.msgs_lock:
+            if not self.msgs:
+                return True
+
+            if len(self.msgs) >= self.max_clouds:
+                return False
+
+            if (msg.header.stamp - self.msgs[0].header.stamp).to_sec() > self.max_delay:
+                return False
+
+            fixed_frame = self.fixed_frame or self.msgs[0].header.frame_id
+            tf = self.tf.lookup_transform_full(self.msgs[0].header.frame_id,
+                                               self.msgs[0].header.stamp,
+                                               msg.header.frame_id,
+                                               msg.header.stamp,
+                                               fixed_frame,
+                                               self.tf_timeout)
+        assert isinstance(tf, TransformStamped)
+
+        translation = np.linalg.norm(array(tf.transform.translation))
+        rospy.logdebug('Translation norm %.3f m.', translation)
+        if translation > self.max_translation:
+            return False
+
+        rotation = 2. * np.arccos(tf.transform.rotation.w)
+        rospy.logdebug('Rotation angle %.3f rad.' % rotation)
+        if rotation > self.max_rotation:
+            return False
+
+        return True
+
+    def cloud_received(self, msg):
+        t0 = timer()
+        assert isinstance(msg, PointCloud2)
+
+        if self.max_age is not None:
+            age = (rospy.Time.now() - msg.header.stamp).to_sec()
+            if age > self.max_age:
+                rospy.logwarn('Skipping cloud too old (%.1f s > %.1f s).'
+                              % (age, self.max_age))
+                return
+
+        # Avoid converting and processing the cloud in passthrough mode.
+        if self.max_clouds == 1:
+            self.cloud_pub.publish(msg)
+            return
+
+        # Check whether we should append this cloud to the buffer.
+        with self.msgs_lock:
+            if not self.should_append(msg):
+                self.assemble_and_publish()
+
+            self.msgs.append(msg)
+
+            if len(self.msgs) >= self.max_clouds:
+                self.assemble_and_publish()
+
+        rospy.logdebug('%i points processed (%.3f s).'
+                       % (msg.height * msg.width, timer() - t0))
+
+    def cloud_received_safe(self, msg):
+        try:
+            self.cloud_received(msg)
+        except TransformException as ex:
+            rospy.logerr('Could not process cloud:\n%s' % ex)
+
+
+if __name__ == '__main__':
+    rospy.init_node('cloud_assembler', log_level=rospy.INFO)
+    node = CloudAssembler()
+    rospy.spin()

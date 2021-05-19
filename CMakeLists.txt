@@ -38,6 +38,7 @@ class_loader_hide_library_symbols(improved_pcl_filters)
 catkin_install_python(
     PROGRAMS
         scripts/box_filter
+        scripts/cloud_assembler
         scripts/cloud_proc
         scripts/odom_cloud_transformer
         scripts/odom_tf
@@ -56,5 +57,3 @@ install(DIRECTORY include/${PROJECT_NAME}/
     DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
     FILES_MATCHING REGEX ".*\\.hp?p?$"
 )
-
-
