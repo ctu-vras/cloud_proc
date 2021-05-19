@@ -56,6 +56,7 @@ def transform(tf, cloud, fields=(('x', 'y', 'z'),), rotate=()):
     if rotate and isinstance(rotate[0], str):
         rotate = [rotate]
     rot, t = tf[:3, :3], tf[:3, 3:]
+    shape = cloud.shape
     cloud = cloud.ravel()
     for fs in fields:
         if len(fs) != 3:
@@ -73,6 +74,7 @@ def transform(tf, cloud, fields=(('x', 'y', 'z'),), rotate=()):
         x = np.matmul(rot, x)
         for i, f in enumerate(fs):
             cloud[f] = x[i, :]
+    cloud.reshape(shape)
     return cloud
 
 
