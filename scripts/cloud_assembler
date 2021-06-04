@@ -56,9 +56,9 @@ class CloudAssembler(rospy.SubscribeListener):
 
         self.sub_kw = {}
         if in_queue_size is not None:
-            sub_kw['queue_size'] = in_queue_size
+            self.sub_kw['queue_size'] = in_queue_size
         if in_buff_size is not None:
-            sub_kw['buff_size'] = in_buff_size
+            self.sub_kw['buff_size'] = in_buff_size
         # Wait for subscribers to subscribe.
         self.cloud_sub = None
 
