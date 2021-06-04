@@ -3,6 +3,9 @@
 Point cloud assembler.
 """
 from __future__ import absolute_import, division, print_function
+
+import copy
+
 from cloud_proc import transform
 from geometry_msgs.msg import TransformStamped
 import numpy as np
@@ -13,6 +16,7 @@ import tf2_client
 from tf2_ros import Buffer, TransformException
 from timeit import default_timer as timer
 from threading import RLock
+from functools import partial
 
 
 def slots(msg):
@@ -81,34 +85,32 @@ class CloudAssembler(rospy.SubscribeListener):
                 self.cloud_sub = None
                 rospy.loginfo('Unsubscribed from %s.' % rospy.resolve_name('in'))
 
-    def assemble_and_publish(self):
+    def assemble_and_publish(self, msgs, timer_event):
         t = timer()
-        with self.msgs_lock:
-            assert self.msgs
-            fixed_frame = self.fixed_frame or self.msgs[0].header.frame_id
-            target_frame = self.target_frame or self.msgs[0].header.frame_id
-            clouds = []
-            for msg in self.msgs:
-                tf = self.tf.lookup_transform_full(target_frame,
-                                                   self.msgs[0].header.stamp,
-                                                   msg.header.frame_id,
-                                                   msg.header.stamp,
-                                                   fixed_frame,
-                                                   self.tf_timeout)
-                assert isinstance(tf, TransformStamped)
-                tf = numpify(tf.transform)
-                cloud = numpify(msg)
-                cloud = transform(tf, cloud.copy())
-                clouds.append(cloud)
+        assert msgs
+        fixed_frame = self.fixed_frame or msgs[0].header.frame_id
+        target_frame = self.target_frame or msgs[0].header.frame_id
+        clouds = []
+        for msg in msgs:
+            tf = self.tf.lookup_transform_full(target_frame,
+                                               msgs[0].header.stamp,
+                                               msg.header.frame_id,
+                                               msg.header.stamp,
+                                               fixed_frame,
+                                               self.tf_timeout)
+            assert isinstance(tf, TransformStamped)
+            tf = numpify(tf.transform)
+            cloud = numpify(msg)
+            cloud = transform(tf, cloud.copy())
+            clouds.append(cloud)
 
-            # TODO: Handle incompatible fields.
-            # TODO: Handle incompatible sizes at first dim.
-            cloud = np.concatenate(clouds)
-            msg = msgify(PointCloud2, cloud)
-            msg.header.frame_id = target_frame
-            msg.header.stamp = self.msgs[0].header.stamp
-            n = len(self.msgs)
-            self.msgs = []
+        # TODO: Handle incompatible fields.
+        # TODO: Handle incompatible sizes at first dim.
+        cloud = np.concatenate(clouds)
+        msg = msgify(PointCloud2, cloud)
+        msg.header.frame_id = target_frame
+        msg.header.stamp = msgs[0].header.stamp
+        n = len(msgs)
 
         self.cloud_pub.publish(msg)
         rospy.loginfo('%i points from %i clouds assembled and published (%.3f s).'
@@ -166,12 +168,16 @@ class CloudAssembler(rospy.SubscribeListener):
         # Check whether we should append this cloud to the buffer.
         with self.msgs_lock:
             if not self.should_append(msg):
-                self.assemble_and_publish()
+                msgs_copy = copy.copy(self.msgs)
+                rospy.Timer(rospy.Duration(1e-6), partial(self.assemble_and_publish, msgs_copy), oneshot=True)
+                self.msgs = []
 
             self.msgs.append(msg)
 
             if len(self.msgs) >= self.max_clouds:
-                self.assemble_and_publish()
+                msgs_copy = copy.copy(self.msgs)
+                rospy.Timer(rospy.Duration(1e-6), partial(self.assemble_and_publish, msgs_copy), oneshot=True)
+                self.msgs = []
 
         rospy.logdebug('%i points processed (%.3f s).'
                        % (msg.height * msg.width, timer() - t0))
