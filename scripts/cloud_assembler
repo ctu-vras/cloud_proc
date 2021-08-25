@@ -41,6 +41,7 @@ class CloudAssembler(rospy.SubscribeListener):
         if not self.target_frame:
             rospy.loginfo('Target frame not specified, using the first cloud in batch.')
         self.max_age = rospy.get_param('~max_age', None)
+        self.min_clouds = rospy.get_param('~min_clouds', 1)
         self.max_clouds = rospy.get_param('~max_clouds', 1)
         self.max_delay = rospy.get_param('~max_delay', 1.0)
         self.max_translation = rospy.get_param('~max_translation', 0.01)
@@ -127,6 +128,9 @@ class CloudAssembler(rospy.SubscribeListener):
 
             if (msg.header.stamp - self.msgs[0].header.stamp).to_sec() > self.max_delay:
                 return False
+
+            if len(self.msgs) < self.min_clouds:
+                return True
 
             fixed_frame = self.fixed_frame or self.msgs[0].header.frame_id
             tf = self.tf.lookup_transform_full(self.msgs[0].header.frame_id,
