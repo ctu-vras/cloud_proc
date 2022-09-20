@@ -34,6 +34,14 @@ target_link_libraries(improved_pcl_filters improved_pcl_filter pcl_crop_box_fixe
 add_dependencies(improved_pcl_filters ${catkin_EXPORTED_TARGETS})
 class_loader_hide_library_symbols(improved_pcl_filters)
 
+add_library(
+    cloud_proc_nodelets
+        src/projection_nodelet.cpp
+        src/voxel_filter_nodelet.cpp
+)
+add_dependencies(cloud_proc_nodelets ${catkin_EXPORTED_TARGETS})
+target_link_libraries(cloud_proc_nodelets ${catkin_LIBRARIES})
+
 catkin_install_python(
     PROGRAMS
         scripts/box_filter
@@ -45,12 +53,12 @@ catkin_install_python(
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(TARGETS improved_pcl_filter improved_pcl_filters pcl_crop_box_fixed
+install(TARGETS improved_pcl_filter improved_pcl_filters pcl_crop_box_fixed cloud_proc_nodelets
     ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
 
-install(FILES nodelets.xml DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+install(FILES cloud_proc_nodelets.xml nodelets.xml DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 
 install(DIRECTORY include/${PROJECT_NAME}/
     DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}

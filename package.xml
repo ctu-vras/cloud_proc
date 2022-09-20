@@ -27,6 +27,7 @@
     <buildtool_depend>catkin</buildtool_depend>
 
     <export>
+        <nodelet plugin="${prefix}/cloud_proc_nodelets.xml" />
         <nodelet plugin="${prefix}/nodelets.xml" />
     </export>
 </package>
