@@ -8,7 +8,6 @@ find_package(catkin REQUIRED COMPONENTS
   cras_cpp_common
   nodelet
   pcl_ros
-  subt_diagnostics
 )
 
 catkin_python_setup()

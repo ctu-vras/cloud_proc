@@ -12,7 +12,6 @@
     <depend>cras_cpp_common</depend>
     <depend>pcl_ros</depend>
     <depend>nodelet</depend>
-    <depend>subt_diagnostics</depend>
 
     <build_depend>class_loader</build_depend>
 
