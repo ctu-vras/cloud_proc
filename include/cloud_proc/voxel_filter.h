@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cloud_proc/common.h>
 #include <cloud_proc/timer.h>
 #include <random>
 #include <sensor_msgs/point_cloud2_iterator.h>
@@ -10,65 +11,6 @@
 
 namespace cloud_proc
 {
-
-/**
- * Copy selected points.
- * @tparam C A container type, with begin and size methods.
- * @param input Input cloud.
- * @param indices Container of indices.
- * @param output Output cloud.
- */
-template<typename C>
-void copy_points(const sensor_msgs::PointCloud2& input,
-                 const C& indices,
-                 sensor_msgs::PointCloud2& output)
-{
-  output.header = input.header;
-  output.height = 1;
-  output.width = decltype(output.width)(indices.size());
-  output.fields = input.fields;
-  output.is_bigendian = input.is_bigendian;
-  output.point_step = input.point_step;
-  output.row_step = output.width * output.point_step;
-  output.data.resize(indices.size() * output.point_step);
-  output.is_dense = input.is_dense;
-  const auto in_ptr = input.data.data();
-  uint8_t* out_ptr = output.data.data();
-  auto it = indices.begin();
-  for (size_t i = 0; i != indices.size(); ++i, ++it)
-  {
-    std::copy(in_ptr + (*it) * input.point_step,
-              in_ptr + (*it + 1) * input.point_step,
-              out_ptr + i * output.point_step);
-  }
-}
-
-//template<typename C>
-//void index_range(size_t n, C& indices)
-//{
-//  indices.reserve(n);
-//  for (size_t i = 0; i < n; ++i)
-//  {
-//    indices.push_back(i);
-//  }
-//  indices.resize(n);
-//}
-
-//template<typename It>
-//void shuffle(It begin, It end)
-//{
-//  std::random_device rd;
-//  std::mt19937 g(rd());
-//  std::shuffle(begin, end, g);
-//}
-
-//template<typename C>
-//void random_permutation(size_t n, C& indices)
-//{
-//  Timer t;
-//  index_range(n, indices);
-//  shuffle(indices.begin(), indices.end());
-//}
 
 template<class T>
 inline void hash_combine(std::size_t& seed, const T& v)
@@ -169,12 +111,12 @@ template<typename T, typename I>
 void voxel_filter(const sensor_msgs::PointCloud2& input,
                   const std::string& field,
                   const T grid,
+                  const bool zero_valid,
                   sensor_msgs::PointCloud2& output,
                   VoxelSet<I>& voxels)
 {
   assert(input.row_step == input.width * input.point_step);
   size_t n_pts = input.height * input.width;
-//  std::vector<size_t> indices;
 //  random_permutation(n_pts, indices);
   std::vector<size_t> keep;
   keep.reserve(n_pts);
@@ -182,10 +124,11 @@ void voxel_filter(const sensor_msgs::PointCloud2& input,
   voxels.reserve(keep.size());
   for (size_t i = 0; i < n_pts; ++i, ++pt_it)
   {
+    if (!is_point_valid(pt_it[0], pt_it[1], pt_it[2], zero_valid))
+      continue;
     Voxel<I> voxel;
     if (!voxel.from(&pt_it[0], grid))
       continue;
-
     if (voxels.find(voxel) == voxels.end())
     {
       voxels.insert(voxel);
@@ -211,6 +154,7 @@ public:
   std::string field_ = "x";
   T grid_ = 1.0;
 //  int keep_ = KEEP_FIRST;
+  bool zero_valid_ = false;
 
   virtual ~VoxelFilter() = default;
 
@@ -218,7 +162,7 @@ public:
   {
 //    assert(keep_ == KEEP_FIRST);
     VoxelSet<I> voxels;
-    voxel_filter<T, I>(input, field_, grid_, output, voxels);
+    voxel_filter<T, I>(input, field_, grid_, zero_valid_, output, voxels);
   }
 };
 

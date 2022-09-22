@@ -1,18 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include <cloud_proc/common.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/PointCloud2.h>
 
 namespace cloud_proc
 {
-
-template<class T>
-bool is_point_valid(T x, T y, T z)
-{
-  return std::isfinite(x) && std::isfinite(y) && std::isfinite(z)
-      && (x != 0 || y != 0 || z != 0);
-}
 
 template<class T>
 T azimuth(T x, T y, T z)
@@ -47,7 +41,7 @@ public:
   int keep_ = KEEP_LAST;
   bool azimuth_only_ = false;
 
-  bool process(const sensor_msgs::PointCloud2& input, sensor_msgs::PointCloud2& output)
+  void process(const sensor_msgs::PointCloud2& input, sensor_msgs::PointCloud2& output)
   {
     assert(input.height >= 1);
     assert(input.width >= 1);
@@ -63,7 +57,7 @@ public:
     output.row_step = output.width * output.point_step;
     output.data.clear();
     // Initialize output points to invalid (zero float are zero bytes).
-    output.data.resize(output.height * output.width * output.point_step, 0);
+    output.data.resize(size_t(output.height) * output.row_step, 0);
     output.is_dense = input.is_dense;
 
     T f_azimuth = (std::isfinite(f_azimuth_) && f_azimuth_ != 0) ? f_azimuth_ : -T(output.width) / (2 * M_PI);
@@ -77,7 +71,7 @@ public:
     {
       for (size_t j_in = 0; j_in < input.width; ++j_in, ++x_in)
       {
-        if (!is_point_valid(x_in[0], x_in[1], x_in[2]))
+        if (!is_point_valid(x_in[0], x_in[1], x_in[2], false))
           continue;
         T u, v;
         u = f_azimuth * azimuth(x_in[0], x_in[1], x_in[2]) + c_azimuth;
@@ -89,9 +83,7 @@ public:
         size_t j_out = u;
         size_t i_out;
         if (azimuth_only_)
-        {
           i_out = i_in;
-        }
         else
         {
           v = f_elevation * elevation(x_in[0], x_in[1], x_in[2]) + c_elevation;
@@ -104,14 +96,14 @@ public:
         if (keep_ == KEEP_FIRST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
-          if (is_point_valid(x_out[0], x_out[1], x_out[2]))
+          if (is_point_valid(x_out[0], x_out[1], x_out[2], false))
             continue;
         }
         // Skip if target pixel contains a closer point.
         else if (keep_ == KEEP_CLOSEST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
-          if (is_point_valid(x_out[0], x_out[1], x_out[2])
+          if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
   //            && std::hypot(x_out[0], x_out[1], x_out[2]) < std::hypot(x_in[0], x_in[1], x_in[2]))
               && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) <= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
             continue;
@@ -119,7 +111,7 @@ public:
         if (keep_ == KEEP_FARTHEST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
-          if (is_point_valid(x_out[0], x_out[1], x_out[2])
+          if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
   //            && std::hypot(x_out[0], x_out[1], x_out[2]) < std::hypot(x_in[0], x_in[1], x_in[2]))
               && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) >= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
             continue;
@@ -131,7 +123,6 @@ public:
                   output.data.begin() + i_out * output.row_step + j_out * output.point_step);
       }
     }
-    return true;
   }
 
 };

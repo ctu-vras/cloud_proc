@@ -1,7 +1,13 @@
 <library path="lib/libcloud_proc_nodelets">
     <class name="cloud_proc/projection" type="cloud_proc::ProjectionNodelet" base_class_type="nodelet::Nodelet">
         <description>
-            Projection nodelet rearranges points based on their spherical projection. Some points may be lost.
+            Projection nodelet rearranges points based on their spherical projection.
+            Only one point in each pixel is kept.
+        </description>
+    </class>
+    <class name="cloud_proc/range_filter" type="cloud_proc::RangeFilterNodelet" base_class_type="nodelet::Nodelet">
+        <description>
+            Range filter nodelet keeps points in a range interval.
         </description>
     </class>
     <class name="cloud_proc/voxel_filter" type="cloud_proc::VoxelFilterNodelet" base_class_type="nodelet::Nodelet">
