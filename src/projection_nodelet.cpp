@@ -1,4 +1,3 @@
-#include <cloud_proc/destagger.h>
 #include <cloud_proc/projection.h>
 #include <cloud_proc/timer.h>
 #include <nodelet/nodelet.h>
