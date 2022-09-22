@@ -36,6 +36,7 @@ class_loader_hide_library_symbols(improved_pcl_filters)
 
 add_library(
     cloud_proc_nodelets
+        src/box_filter_nodelet.cpp
         src/projection_nodelet.cpp
         src/range_filter_nodelet.cpp
         src/voxel_filter_nodelet.cpp

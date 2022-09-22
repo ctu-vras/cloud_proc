@@ -1,4 +1,9 @@
 <library path="lib/libcloud_proc_nodelets">
+    <class name="cloud_proc/box_filter" type="cloud_proc::BoxFilterNodelet" base_class_type="nodelet::Nodelet">
+        <description>
+            Box filter nodelet keeps points with the field value within an interval.
+        </description>
+    </class>
     <class name="cloud_proc/projection" type="cloud_proc::ProjectionNodelet" base_class_type="nodelet::Nodelet">
         <description>
             Projection nodelet rearranges points based on their spherical projection.
