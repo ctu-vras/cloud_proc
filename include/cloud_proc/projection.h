@@ -99,20 +99,20 @@ public:
           if (is_point_valid(x_out[0], x_out[1], x_out[2], false))
             continue;
         }
-        // Skip if target pixel contains a closer point.
+        // Skip if target pixel contains a valid closer point.
         else if (keep_ == KEEP_CLOSEST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
+          // TODO: Use 3-argument hypot in C++17.
           if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
-  //            && std::hypot(x_out[0], x_out[1], x_out[2]) < std::hypot(x_in[0], x_in[1], x_in[2]))
               && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) <= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
             continue;
         }
-        if (keep_ == KEEP_FARTHEST)
+        // Skip if target pixel contains a valid farther point.
+        else if (keep_ == KEEP_FARTHEST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
           if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
-  //            && std::hypot(x_out[0], x_out[1], x_out[2]) < std::hypot(x_in[0], x_in[1], x_in[2]))
               && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) >= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
             continue;
         }
