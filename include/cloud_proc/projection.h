@@ -21,6 +21,18 @@ T elevation(T x, T y, T z)
 }
 
 template<class T>
+T hypot(const T x, const T y, const T z)
+{
+  // Use 3-argument hypot in C++17.
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
+  //C++17 specific stuff here
+  return std::hypot(x, y, z);
+#else
+  return std::hypot(std::hypot(x, y), z);
+#endif
+}
+
+template<class T>
 class Projection
 {
 public:
@@ -103,9 +115,8 @@ public:
         else if (keep_ == KEEP_CLOSEST)
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
-          // TODO: Use 3-argument hypot in C++17.
           if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
-              && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) <= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
+              && hypot(x_out[0], x_out[1], x_out[2]) <= hypot(x_in[0], x_in[1], x_in[2]))
             continue;
         }
         // Skip if target pixel contains a valid farther point.
@@ -113,7 +124,7 @@ public:
         {
           auto x_out = x_out_begin + i_out * output.width + j_out;
           if (is_point_valid(x_out[0], x_out[1], x_out[2], false)
-              && std::hypot(std::hypot(x_out[0], x_out[1]), x_out[2]) >= std::hypot(std::hypot(x_in[0], x_in[1]), x_in[2]))
+              && hypot(x_out[0], x_out[1], x_out[2]) >= hypot(x_in[0], x_in[1], x_in[2]))
             continue;
         }
 
