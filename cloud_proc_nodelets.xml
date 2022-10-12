@@ -15,6 +15,11 @@
             Range filter nodelet keeps points in a range interval.
         </description>
     </class>
+    <class name="cloud_proc/ortho_stats" type="cloud_proc::OrthoStatsNodelet" base_class_type="nodelet::Nodelet">
+        <description>
+            Orthographic projections and statistics in bins.
+        </description>
+    </class>
     <class name="cloud_proc/voxel_filter" type="cloud_proc::VoxelFilterNodelet" base_class_type="nodelet::Nodelet">
         <description>
             Voxel filter nodelet keeps only one point from each voxel.

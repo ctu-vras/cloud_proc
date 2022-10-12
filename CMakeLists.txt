@@ -39,6 +39,7 @@ add_library(
         src/box_filter_nodelet.cpp
         src/projection_nodelet.cpp
         src/range_filter_nodelet.cpp
+        src/ortho_stats_nodelet.cpp
         src/voxel_filter_nodelet.cpp
 )
 add_dependencies(cloud_proc_nodelets ${catkin_EXPORTED_TARGETS})
