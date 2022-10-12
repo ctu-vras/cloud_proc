@@ -3,7 +3,6 @@
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
-#include <sensor_msgs/point_cloud2_iterator.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
