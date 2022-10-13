@@ -23,6 +23,46 @@ protected:
 public:
     void update_params()
     {
+        // Read high-level parameters.
+        int size = 0;
+        getPrivateNodeHandle().param("size", size, size);
+        if (size > 0)
+        {
+            NODELET_INFO("Size: %i", size);
+            stats_.height_ = size;
+            stats_.width_ = size;
+        }
+
+        float extent = 0.0;
+        getPrivateNodeHandle().param("extent", extent, extent);
+        if (extent > 0)
+            NODELET_INFO("Extent [m]: %f", extent);
+
+        float grid = 0.0;
+        getPrivateNodeHandle().param("grid", grid, grid);
+        if (grid > 0)
+            NODELET_INFO("Grid [m]: %f", grid);
+
+        // Compute derived parameters.
+        if (size == 0 && extent > 0.0 && grid > 0.0)
+        {
+            size = int(std::ceil(extent / grid));
+            NODELET_INFO("Size set to %i from extent %f and grid %f.", size, extent, grid);
+        }
+        else if (size > 0 && extent == 0.0 && grid > 0.0)
+        {
+            extent = size * grid;
+            NODELET_INFO("Extent set to %f from size %i and grid %f.", extent, size, grid);
+        }
+        if (size > 0 && extent > 0.0)
+        {
+            stats_.fx_ = stats_.fy_ = size / extent;
+            stats_.cx_ = stats_.cy_ = float(size - 1) / 2;
+            NODELET_INFO("Focal length and principal point set to %f and %f, respectively, from size %i and extent %f.",
+                         stats_.fx_, stats_.cx_, size, extent);
+        }
+
+        // Read low-level parameters with derived defaults.
         getPrivateNodeHandle().param("height", stats_.height_, stats_.height_);
         getPrivateNodeHandle().param("width", stats_.width_, stats_.width_);
         getPrivateNodeHandle().param("fx", stats_.fx_, stats_.fx_);
