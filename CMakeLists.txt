@@ -50,6 +50,7 @@ catkin_install_python(
         scripts/box_filter
         scripts/cloud_assembler
         scripts/cloud_proc
+        scripts/cloud_to_image
         scripts/odom_cloud_transformer
         scripts/odom_tf
         scripts/tf_odom

@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
+import cv2 as cv
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured
+from ros_numpy import msgify, numpify
+import rospy
+from sensor_msgs.msg import CompressedImage, Image, PointCloud2
+
+
+class CloudToImage(object):
+    def __init__(self):
+        self.field = rospy.get_param('~field', 'norm(xyz)')
+        self.scale = rospy.get_param('~scale', 1.0)
+        self.offset = rospy.get_param('~offset', 0.0)
+        self.negative = rospy.get_param('~negative', False)
+        self.image_pub = rospy.Publisher('image', Image, queue_size=2)
+        self.compressed_pub = rospy.Publisher(self.image_pub.resolved_name + '/compressed', CompressedImage, queue_size=2)
+        self.cloud_sub = rospy.Subscriber('cloud', PointCloud2, self.on_cloud, queue_size=2)
+
+    def on_cloud(self, cloud_msg):
+        if self.image_pub.get_num_connections() == 0 and self.compressed_pub.get_num_connections() == 0:
+            return
+
+        cloud = numpify(cloud_msg)
+
+        if self.field == 'norm(xyz)':  # Compute depth as norm of xyz.
+            image = structured_to_unstructured(cloud[['x', 'y', 'z']])
+            image = np.linalg.norm(image, 2, axis=-1)
+        elif self.field not in cloud.dtype.names:
+            rospy.logerr('Field %s not found among %s.', self.field, ', '.join(cloud.dtype.names))
+            return
+        else:
+            image = cloud[self.field]
+
+        if self.scale != 1.0 or self.offset != 0.0:
+            image = image * self.scale + self.offset
+
+        image = 1000.0 * image
+        image = image.astype(np.uint16)
+
+        if self.negative:
+            image[image > 0] = 2**16 - image[image > 0]
+
+        if self.image_pub.get_num_connections():
+            image_msg = msgify(Image, image, 'mono16')
+            image_msg.header = cloud_msg.header
+            self.image_pub.publish(image_msg)
+
+        if self.compressed_pub.get_num_connections():
+            image_msg = CompressedImage()
+            image_msg.header = cloud_msg.header
+            image_msg.format = 'mono16; png compressed'
+            image_msg.data = cv.imencode('.png', image, [cv.IMWRITE_PNG_COMPRESSION, 5])[1].tobytes()
+            self.compressed_pub.publish(image_msg)
+
+
+def main():
+    rospy.init_node('cloud_to_image', log_level=rospy.INFO)
+    node = CloudToImage()
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()
