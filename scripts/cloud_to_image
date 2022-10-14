@@ -37,6 +37,7 @@ class CloudToImage(object):
             image = image * self.scale + self.offset
 
         image = 1000.0 * image
+        image = image.clip(np.iinfo(np.uint16).min, np.iinfo(np.uint16).max)
         image = image.astype(np.uint16)
 
         if self.negative:
