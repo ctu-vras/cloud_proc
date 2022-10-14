@@ -129,7 +129,7 @@ public:
                     tf.transform.translation.z = 0.0;
                 }
             }
-            catch (tf2::TransformException& ex)
+            catch (const tf2::TransformException& ex)
             {
                 NODELET_ERROR("Could not transform %s to %s: %s.",
                               msg->header.frame_id.c_str(), target_frame_.c_str(), ex.what());

@@ -247,18 +247,19 @@ public:
         sensor_msgs::PointCloud2Modifier modifier(output);
         if (mode_ == MODE_1D)
         {
-            modifier.setPointCloud2Fields(7,
+            modifier.setPointCloud2Fields(8,
                                           "x", 1, sensor_msgs::PointField::FLOAT32,
                                           "y", 1, sensor_msgs::PointField::FLOAT32,
                                           "z", 1, sensor_msgs::PointField::FLOAT32,
                                           "z_min", 1, sensor_msgs::PointField::FLOAT32,
                                           "z_max", 1, sensor_msgs::PointField::FLOAT32,
                                           "z_mean", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z_std", 1, sensor_msgs::PointField::FLOAT32);
+                                          "z_std", 1, sensor_msgs::PointField::FLOAT32,
+                                          "support", 1, sensor_msgs::PointField::UINT32);
         }
-        else
+        else if (mode_ == MODE_3D)
         {
-            modifier.setPointCloud2Fields(13,
+            modifier.setPointCloud2Fields(14,
                                           "x", 1, sensor_msgs::PointField::FLOAT32,
                                           "y", 1, sensor_msgs::PointField::FLOAT32,
                                           "z", 1, sensor_msgs::PointField::FLOAT32,
@@ -271,12 +272,14 @@ public:
                                           "xz", 1, sensor_msgs::PointField::FLOAT32,
                                           "yy", 1, sensor_msgs::PointField::FLOAT32,
                                           "yz", 1, sensor_msgs::PointField::FLOAT32,
-                                          "zz", 1, sensor_msgs::PointField::FLOAT32);
+                                          "zz", 1, sensor_msgs::PointField::FLOAT32,
+                                          "support", 1, sensor_msgs::PointField::UINT32);
         }
 
         n = num_points(output);
         sensor_msgs::PointCloud2Iterator<T> x_out(output, "x");
-        for (size_t i = 0; i < n; ++i, ++x_out)
+        sensor_msgs::PointCloud2Iterator<uint32_t> n_out(output, "support");
+        for (size_t i = 0; i < n; ++i, ++x_out, ++n_out)
         {
             if (mode_ == MODE_1D)
             {
@@ -292,6 +295,7 @@ public:
                 x_out[4] = stats_z_[i].max();
                 x_out[5] = stats_z_[i].mean();
                 x_out[6] = stats_z_[i].std();
+                *n_out = stats_z_[i].n_;
             }
             else if (mode_ == MODE_3D)
             {
@@ -314,6 +318,7 @@ public:
                 x_out[10] = stats_xyz_[i].cov()(1, 1);
                 x_out[11] = stats_xyz_[i].cov()(1, 2);
                 x_out[12] = stats_xyz_[i].cov()(2, 2);
+                *n_out = stats_xyz_[i].n_;
             }
         }
     }
