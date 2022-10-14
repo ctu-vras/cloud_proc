@@ -71,7 +71,6 @@ class RunningStats3d
 public:
     typedef Eigen::Matrix<T, 3, 3> Mat3;
     typedef Eigen::Matrix<T, 3, 1> Vec3;
-    typedef Eigen::Map<Vec3> Vec3Map;
     typedef Eigen::Map<const Vec3> ConstVec3Map;
     Vec3 x_ = Vec3::Zero();
     Mat3 x2_ = Mat3::Zero();
@@ -123,6 +122,7 @@ template<class T>
 class OrthoStats
 {
 public:
+    typedef Eigen::Matrix<T, 3, 3> Mat3;
     typedef Eigen::Vector3f Vec3f;
     typedef Eigen::Map<const Vec3f> ConstVec3fMap;
     typedef Eigen::Transform<float, 3, Eigen::Isometry> Transform3f;
@@ -138,6 +138,10 @@ public:
         MODE_1D = 0,
         MODE_3D = 1,
     };
+
+    float min_z_ = -std::numeric_limits<float>::infinity();
+    float max_z_ = std::numeric_limits<float>::infinity();
+    bool zero_valid_ = false;
 
     float fx_ = 25.6;
     float fy_ = 25.6;
@@ -186,6 +190,10 @@ public:
 
         // Construct eigen transform to target frame.
         Transform3f tf = tf2::transformToEigen(transform).cast<float>();
+        bool is_identity = (transform.rotation.w == 1.0
+                            && transform.rotation.x == 0.0
+                            && transform.rotation.y == 0.0
+                            && transform.rotation.z == 0.0);
 
         // Compute statistics.
         reset_stats();
@@ -194,16 +202,19 @@ public:
         for (size_t i = 0; i < n; ++i, ++x_in)
         {
             ConstVec3fMap p(&x_in[0]);
-            if (!is_point_valid(p(0), p(1), p(2), false))
-              continue;
-            Vec3f q = (transform.rotation.w == 1) ? p : tf * p;
+            if (!is_point_valid(p(0), p(1), p(2), zero_valid_))
+                continue;
+            Vec3f q = is_identity ? p : tf * p;
+
+            if (q(2) < min_z_ || q(2) > max_z_)
+                continue;
 
             T u = fx_ * q(0) + cx_;
             // Move [-0.5, 0.5) to [0, 1).
             u += 0.5;
             // Skip points outside the image.
             if (u < 0 || u >= width_ || std::isnan(u))
-              continue;
+                continue;
             size_t c = u;
 
             T v = fy_ * q(1) + cy_;
@@ -234,14 +245,34 @@ public:
         output.is_dense = false;
 
         sensor_msgs::PointCloud2Modifier modifier(output);
-        modifier.setPointCloud2Fields(7,
-                                      "x", 1, sensor_msgs::PointField::FLOAT32,
-                                      "y", 1, sensor_msgs::PointField::FLOAT32,
-                                      "z", 1, sensor_msgs::PointField::FLOAT32,
-                                      "z_min", 1, sensor_msgs::PointField::FLOAT32,
-                                      "z_max", 1, sensor_msgs::PointField::FLOAT32,
-                                      "z_mean", 1, sensor_msgs::PointField::FLOAT32,
-                                      "z_std", 1, sensor_msgs::PointField::FLOAT32);
+        if (mode_ == MODE_1D)
+        {
+            modifier.setPointCloud2Fields(7,
+                                          "x", 1, sensor_msgs::PointField::FLOAT32,
+                                          "y", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_min", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_max", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_mean", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_std", 1, sensor_msgs::PointField::FLOAT32);
+        }
+        else
+        {
+            modifier.setPointCloud2Fields(13,
+                                          "x", 1, sensor_msgs::PointField::FLOAT32,
+                                          "y", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_min", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_max", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_mean", 1, sensor_msgs::PointField::FLOAT32,
+                                          "z_std", 1, sensor_msgs::PointField::FLOAT32,
+                                          "xx", 1, sensor_msgs::PointField::FLOAT32,
+                                          "xy", 1, sensor_msgs::PointField::FLOAT32,
+                                          "xz", 1, sensor_msgs::PointField::FLOAT32,
+                                          "yy", 1, sensor_msgs::PointField::FLOAT32,
+                                          "yz", 1, sensor_msgs::PointField::FLOAT32,
+                                          "zz", 1, sensor_msgs::PointField::FLOAT32);
+        }
 
         n = num_points(output);
         sensor_msgs::PointCloud2Iterator<T> x_out(output, "x");
@@ -262,7 +293,7 @@ public:
                 x_out[5] = stats_z_[i].mean();
                 x_out[6] = stats_z_[i].std();
             }
-            else
+            else if (mode_ == MODE_3D)
             {
                 x_out[0] = stats_xyz_[i].mean()(0);
                 x_out[1] = stats_xyz_[i].mean()(1);
@@ -275,7 +306,14 @@ public:
                 x_out[3] = stats_xyz_[i].min()(2);
                 x_out[4] = stats_xyz_[i].max()(2);
                 x_out[5] = stats_xyz_[i].mean()(2);
-                x_out[6] = std::sqrt(stats_xyz_[i].cov()(2, 2));
+                Mat3 cov = stats_xyz_[i].cov();
+                x_out[6] = std::sqrt(cov(2, 2));
+                x_out[7] = stats_xyz_[i].cov()(0, 0);
+                x_out[8] = stats_xyz_[i].cov()(0, 1);
+                x_out[9] = stats_xyz_[i].cov()(0, 2);
+                x_out[10] = stats_xyz_[i].cov()(1, 1);
+                x_out[11] = stats_xyz_[i].cov()(1, 2);
+                x_out[12] = stats_xyz_[i].cov()(2, 2);
             }
         }
     }

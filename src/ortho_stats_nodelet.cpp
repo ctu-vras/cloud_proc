@@ -13,8 +13,9 @@ class OrthoStatsNodelet : public nodelet::Nodelet
 {
 protected:
     OrthoStats<float> stats_;
-    std::string frame_;
-    double timeout_ = 0.0;
+    std::string target_frame_;
+    bool use_only_orientation_ = false;
+    float timeout_ = 0.0;
     tf2_ros::Buffer tf_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     ros::Publisher cloud_pub_;
@@ -71,7 +72,11 @@ public:
         getPrivateNodeHandle().param("cy", stats_.cy_, stats_.cy_);
         getPrivateNodeHandle().param("mode", stats_.mode_, stats_.mode_);
         getPrivateNodeHandle().param("output_z", stats_.output_z_, stats_.output_z_);
-        getPrivateNodeHandle().param("frame", frame_, frame_);
+        getPrivateNodeHandle().param("target_frame", target_frame_, target_frame_);
+        getPrivateNodeHandle().param("use_only_orientation", use_only_orientation_, use_only_orientation_);
+        getPrivateNodeHandle().param("min_z", stats_.min_z_, stats_.min_z_);
+        getPrivateNodeHandle().param("max_z", stats_.max_z_, stats_.max_z_);
+        getPrivateNodeHandle().param("zero_valid", stats_.zero_valid_, stats_.zero_valid_);
         getPrivateNodeHandle().param("timeout", timeout_, timeout_);
         NODELET_INFO("Height: %i", stats_.height_);
         NODELET_INFO("Width: %i", stats_.width_);
@@ -81,51 +86,64 @@ public:
         NODELET_INFO("Principal point y: %f", stats_.cy_);
         NODELET_INFO("Mode: %i", stats_.mode_);
         NODELET_INFO("Output z: %i", stats_.output_z_);
-        NODELET_INFO("Frame: %s", frame_.c_str());
+        NODELET_INFO("Target frame: %s", target_frame_.c_str());
+        NODELET_INFO("Use only orientation: %i", use_only_orientation_);
+        if (use_only_orientation_)
+            NODELET_WARN("Output cloud data will not be consistent with reported (input) frame.");
+        NODELET_INFO("Min z: %f", stats_.min_z_);
+        NODELET_INFO("Max z: %f", stats_.max_z_);
+        NODELET_INFO("Zero valid: %i", stats_.zero_valid_);
         NODELET_INFO("Timeout: %f", timeout_);
     }
     void advertise()
     {
-      cloud_pub_ = getNodeHandle().advertise<sensor_msgs::PointCloud2>("output", 2);
+        cloud_pub_ = getNodeHandle().advertise<sensor_msgs::PointCloud2>("output", 2);
     }
     void subscribe()
     {
-      if (!frame_.empty())
-        tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
-      cloud_sub_ = getNodeHandle().subscribe("input", 2, &OrthoStatsNodelet::onCloud, this);
+        if (!target_frame_.empty())
+            tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
+        cloud_sub_ = getNodeHandle().subscribe("input", 2, &OrthoStatsNodelet::onCloud, this);
     }
     void onInit() override
     {
-      update_params();
-      advertise();
-      subscribe();
+        update_params();
+        advertise();
+        subscribe();
     }
     void onCloud(const sensor_msgs::PointCloud2::ConstPtr& msg)
     {
-      Timer t;
-      geometry_msgs::TransformStamped tf;
-      tf.transform.rotation.w = 1.0;
-      if (!frame_.empty())
-      {
-        try
+        Timer t;
+        geometry_msgs::TransformStamped tf;
+        tf.transform.rotation.w = 1.0;
+        if (!target_frame_.empty())
         {
-          tf = tf_.lookupTransform(frame_, msg->header.frame_id, msg->header.stamp, ros::Duration(timeout_));
-          tf.transform.translation.x = 0;
-          tf.transform.translation.y = 0;
-          tf.transform.translation.z = 0;
+            try
+            {
+                tf = tf_.lookupTransform(target_frame_, msg->header.frame_id,
+                                         msg->header.stamp, ros::Duration(timeout_));
+                if (use_only_orientation_)
+                {
+                    tf.transform.translation.x = 0.0;
+                    tf.transform.translation.y = 0.0;
+                    tf.transform.translation.z = 0.0;
+                }
+            }
+            catch (tf2::TransformException& ex)
+            {
+                NODELET_ERROR("Could not transform %s to %s: %s.",
+                              msg->header.frame_id.c_str(), target_frame_.c_str(), ex.what());
+                return;
+            }
+            NODELET_INFO("Waited for transform: %f s.", t.secondsElapsed());
         }
-        catch (tf2::TransformException& ex)
-        {
-          NODELET_ERROR("Could not transform %s to %s: %s.", msg->header.frame_id.c_str(), frame_.c_str(), ex.what());
-          return;
-        }
-        NODELET_INFO("Waited for transform: %f s.", t.secondsElapsed());
-      }
-      t.reset();
-      auto output = boost::make_shared<sensor_msgs::PointCloud2>();
-      stats_.process(*msg, tf.transform, *output);
-      cloud_pub_.publish(output);
-      NODELET_INFO("Projected %lu points: %f s.", num_points(*msg), t.secondsElapsed());
+        t.reset();
+        auto output = boost::make_shared<sensor_msgs::PointCloud2>();
+        stats_.process(*msg, tf.transform, *output);
+        if (!target_frame_.empty() && !use_only_orientation_)
+            output->header.frame_id = target_frame_;
+        cloud_pub_.publish(output);
+        NODELET_INFO("Projected %lu points: %f s.", num_points(*msg), t.secondsElapsed());
     }
 };
 
