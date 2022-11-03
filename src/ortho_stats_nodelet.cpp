@@ -72,6 +72,7 @@ public:
         getPrivateNodeHandle().param("cy", stats_.cy_, stats_.cy_);
         getPrivateNodeHandle().param("mode", stats_.mode_, stats_.mode_);
         getPrivateNodeHandle().param("output_z", stats_.output_z_, stats_.output_z_);
+        getPrivateNodeHandle().param("eigenvalues", stats_.eigenvalues_, stats_.eigenvalues_);
         getPrivateNodeHandle().param("target_frame", target_frame_, target_frame_);
         getPrivateNodeHandle().param("use_only_orientation", use_only_orientation_, use_only_orientation_);
         getPrivateNodeHandle().param("min_z", stats_.min_z_, stats_.min_z_);
@@ -86,6 +87,7 @@ public:
         NODELET_INFO("Principal point y: %f", stats_.cy_);
         NODELET_INFO("Mode: %i", stats_.mode_);
         NODELET_INFO("Output z: %i", stats_.output_z_);
+        NODELET_INFO("Eigenvalues: %i", stats_.eigenvalues_);
         NODELET_INFO("Target frame: %s", target_frame_.c_str());
         NODELET_INFO("Use only orientation: %i", use_only_orientation_);
         if (use_only_orientation_)

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cloud_proc/common.h>
+#include <Eigen/Eigenvalues>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_eigen/tf2_eigen.h>
@@ -123,9 +124,9 @@ class OrthoStats
 {
 public:
     typedef Eigen::Matrix<T, 3, 3> Mat3;
-    typedef Eigen::Vector3f Vec3f;
-    typedef Eigen::Map<const Vec3f> ConstVec3fMap;
-    typedef Eigen::Transform<float, 3, Eigen::Isometry> Transform3f;
+    typedef Eigen::Matrix<T, 3, 1> Vec3;
+    typedef Eigen::Map<const Vec3> ConstVec3Map;
+    typedef Eigen::Transform<T, 3, Eigen::Isometry> Transform3;
 
     enum Output
     {
@@ -139,19 +140,21 @@ public:
         MODE_3D = 1,
     };
 
-    float min_z_ = -std::numeric_limits<float>::infinity();
-    float max_z_ = std::numeric_limits<float>::infinity();
+    T min_z_ = -std::numeric_limits<float>::infinity();
+    T max_z_ = std::numeric_limits<float>::infinity();
     bool zero_valid_ = false;
 
-    float fx_ = 25.6;
-    float fy_ = 25.6;
-    float cx_ = 0.0;
-    float cy_ = 0.0;
+    T fx_ = 25.6;
+    T fy_ = 25.6;
+    T cx_ = 0.0;
+    T cy_ = 0.0;
     int height_ = 256;
     int width_ = 256;
 
-    int output_z_ = OUTPUT_Z_MEAN;
     int mode_ = MODE_1D;
+    int output_z_ = OUTPUT_Z_MEAN;
+    // Eigendecomposition of covariance matrix and derived features.
+    bool eigenvalues_ = false;
 
     std::vector<RunningStats<T>> stats_x_;
     std::vector<RunningStats<T>> stats_y_;
@@ -189,7 +192,7 @@ public:
         assert(input.row_step == input.width * input.point_step);
 
         // Construct eigen transform to target frame.
-        Transform3f tf = tf2::transformToEigen(transform).cast<float>();
+        Transform3 tf = tf2::transformToEigen(transform).cast<float>();
         bool is_identity = (transform.rotation.w == 1.0
                             && transform.rotation.x == 0.0
                             && transform.rotation.y == 0.0
@@ -201,10 +204,10 @@ public:
         sensor_msgs::PointCloud2ConstIterator<T> x_in(input, "x");
         for (size_t i = 0; i < n; ++i, ++x_in)
         {
-            ConstVec3fMap p(&x_in[0]);
+            ConstVec3Map p(&x_in[0]);
             if (!is_point_valid(p(0), p(1), p(2), zero_valid_))
                 continue;
-            Vec3f q = is_identity ? p : tf * p;
+            Vec3 q = is_identity ? p : tf * p;
 
             if (q(2) < min_z_ || q(2) > max_z_)
                 continue;
@@ -259,21 +262,50 @@ public:
         }
         else if (mode_ == MODE_3D)
         {
-            modifier.setPointCloud2Fields(14,
-                                          "x", 1, sensor_msgs::PointField::FLOAT32,
-                                          "y", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z_min", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z_max", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z_mean", 1, sensor_msgs::PointField::FLOAT32,
-                                          "z_std", 1, sensor_msgs::PointField::FLOAT32,
-                                          "xx", 1, sensor_msgs::PointField::FLOAT32,
-                                          "xy", 1, sensor_msgs::PointField::FLOAT32,
-                                          "xz", 1, sensor_msgs::PointField::FLOAT32,
-                                          "yy", 1, sensor_msgs::PointField::FLOAT32,
-                                          "yz", 1, sensor_msgs::PointField::FLOAT32,
-                                          "zz", 1, sensor_msgs::PointField::FLOAT32,
-                                          "support", 1, sensor_msgs::PointField::UINT32);
+            // TODO: Configurable output fields.
+            if (eigenvalues_)
+            {
+                modifier.setPointCloud2Fields(21,
+                                              "x", 1, sensor_msgs::PointField::FLOAT32,
+                                              "y", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_min", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_max", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_mean", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_std", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xx", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xy", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "yy", 1, sensor_msgs::PointField::FLOAT32,
+                                              "yz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "zz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "support", 1, sensor_msgs::PointField::UINT32,
+                                              "eigenvalue_0", 1, sensor_msgs::PointField::FLOAT32,
+                                              "eigenvalue_1", 1, sensor_msgs::PointField::FLOAT32,
+                                              "eigenvalue_2", 1, sensor_msgs::PointField::FLOAT32,
+                                              "normal_x", 1, sensor_msgs::PointField::FLOAT32,
+                                              "normal_y", 1, sensor_msgs::PointField::FLOAT32,
+                                              "normal_z", 1, sensor_msgs::PointField::FLOAT32,
+                                              "inclination", 1, sensor_msgs::PointField::FLOAT32);
+            }
+            else
+            {
+                modifier.setPointCloud2Fields(14,
+                                              "x", 1, sensor_msgs::PointField::FLOAT32,
+                                              "y", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_min", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_max", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_mean", 1, sensor_msgs::PointField::FLOAT32,
+                                              "z_std", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xx", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xy", 1, sensor_msgs::PointField::FLOAT32,
+                                              "xz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "yy", 1, sensor_msgs::PointField::FLOAT32,
+                                              "yz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "zz", 1, sensor_msgs::PointField::FLOAT32,
+                                              "support", 1, sensor_msgs::PointField::UINT32);
+            }
         }
 
         n = num_points(output);
@@ -312,13 +344,26 @@ public:
                 x_out[5] = stats_xyz_[i].mean()(2);
                 Mat3 cov = stats_xyz_[i].cov();
                 x_out[6] = std::sqrt(cov(2, 2));
-                x_out[7] = stats_xyz_[i].cov()(0, 0);
-                x_out[8] = stats_xyz_[i].cov()(0, 1);
-                x_out[9] = stats_xyz_[i].cov()(0, 2);
-                x_out[10] = stats_xyz_[i].cov()(1, 1);
-                x_out[11] = stats_xyz_[i].cov()(1, 2);
-                x_out[12] = stats_xyz_[i].cov()(2, 2);
+                x_out[7] = cov(0, 0);
+                x_out[8] = cov(0, 1);
+                x_out[9] = cov(0, 2);
+                x_out[10] = cov(1, 1);
+                x_out[11] = cov(1, 2);
+                x_out[12] = cov(2, 2);
                 *n_out = stats_xyz_[i].n_;
+                if (eigenvalues_)
+                {
+                    Eigen::SelfAdjointEigenSolver<Mat3> eig(cov);
+                    Vec3 eigenvalues = eig.eigenvalues();
+                    Mat3 eigenvectors = eig.eigenvectors();
+                    x_out[14] = eigenvalues(0);
+                    x_out[15] = eigenvalues(1);
+                    x_out[16] = eigenvalues(2);
+                    x_out[17] = eigenvectors(0, 0);
+                    x_out[18] = eigenvectors(1, 0);
+                    x_out[19] = eigenvectors(2, 0);
+                    x_out[20] = std::acos(std::abs(eigenvectors(2, 0)));
+                }
             }
         }
     }
