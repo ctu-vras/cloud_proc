@@ -40,18 +40,11 @@ protected:
   bool publishPeriodically;
   std::string fixedFrame;
   std::unordered_map<std::string, cras::CloudChannelType> transformChannels;
+  bool removeOtherChannels {false};
 
   std::unique_ptr<cras::DiagnosedPublisher<sensor_msgs::PointCloud2>> pubOutputDiag;
   std::unique_ptr<cras::DiagnosedPubSub<sensor_msgs::PointCloud2>> inputDiag;
   mutable bool diagHasTfProblems = false;
-  double receiveRateTolerance;
-  double publishRateTolerance;
-  size_t receiveRateWindowSize;
-  size_t publishRateWindowSize;
-  double minAcceptableReceiveDelay;
-  double maxAcceptableReceiveDelay;
-  double minAcceptablePublishDelay;
-  double maxAcceptablePublishDelay;
 
   void produceTfDiag(diagnostic_updater::DiagnosticStatusWrapper &stat);
 
@@ -66,7 +59,7 @@ protected:
   inline sensor_msgs::PointCloud2Ptr transformPointCloud(const std::string& target_frame, const ros::Time& target_time,
       const sensor_msgs::PointCloud2& in, const std::string& logName) const
   {
-      if (in.header.frame_id == target_frame && in.header.stamp == target_time)
+      if (!this->removeOtherChannels && in.header.frame_id == target_frame && in.header.stamp == target_time)
           return boost::make_shared<sensor_msgs::PointCloud2>(in);
 
       // Get the TF transform
@@ -99,7 +92,14 @@ protected:
       }
 
       sensor_msgs::PointCloud2Ptr out(new sensor_msgs::PointCloud2);
-      cras::transformWithChannels(in, *out, transform, this->transformChannels);
+      if (this->removeOtherChannels)
+      {
+	cras::transformOnlyChannels(in, *out, transform, this->transformChannels);
+      }
+      else
+      {
+	cras::transformWithChannels(in, *out, transform, this->transformChannels);
+      }
 
       return out;
   }
@@ -118,7 +118,7 @@ protected:
 
   inline PointCloud2::ConstPtr transformAsInput(const PointCloud2::ConstPtr& cloud) const
   {
-      if (!this->tf_input_frame_.empty () && cloud->header.frame_id != this->tf_input_frame_)
+      if (this->removeOtherChannels || (!this->tf_input_frame_.empty () && cloud->header.frame_id != this->tf_input_frame_))
           return this->transformPointCloud(this->tf_input_frame_, cloud->header.stamp, *cloud, "input dataset");
       else
           return boost::make_shared<PointCloud2>(*cloud);

@@ -98,13 +98,17 @@ void ImprovedFilter::onInit()
     this->tfWaitTimeout = privateParam->getParam("tf_wait_timeout", ros::Duration(1), "s");
 
     const auto produceDiagnostics = privateParam->getParam("produce_diagnostics", true);
+    this->removeOtherChannels = privateParam->getParam("remove_other_channels", false);
 
-    const auto transformChannelsPoint = privateParam->getParam("transform_channels_point", std::vector<std::string>({"vp_"}));
+    const auto transformChannelsPoint = privateParam->getParam("transform_channels_point", std::vector<std::string>({"", "vp_"}));
     const auto transformChannelsDirection = privateParam->getParam("transform_channels_direction", std::vector<std::string>({"normal_"}));
+    const auto transformChannelsScalar = privateParam->getParam("transform_channels_scalar", std::vector<std::string>({"intensity", "rgb", "r", "g", "b"}));
     for (const auto& channel : transformChannelsPoint)
       this->transformChannels[channel] = cras::CloudChannelType::POINT;
     for (const auto& channel : transformChannelsDirection)
       this->transformChannels[channel] = cras::CloudChannelType::DIRECTION;
+    for (const auto& channel : transformChannelsScalar)
+      this->transformChannels[channel] = cras::CloudChannelType::SCALAR;
 
     this->pub_output_ = this->template advertise<PointCloud2>(*this->pnh_, "output", this->max_queue_size_);
 

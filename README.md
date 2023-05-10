@@ -162,10 +162,13 @@ Parameters:
      To launch the nodelet with a shared TF2 buffer, load it into `cras_cpp_common/nodelet_manager_sharing_tf_buffer`
      and not a normal nodelet manager. The shared buffer is accessible using the `getBuffer()` method.
  - Improved filter - transform arbitrary channels:
+   - `remove_other_channels`: If True, channels not mentioned in the following parameters are removed from the output.
    - `transform_channels_point`: List of prefixes of channels to be transformed as points (6DOF). If channel consists of
      `vp_x`, `vp_y` and `vp_z`, pass only `vp_` as the parameter here.
    - `transform_channels_direction`: List of prefixes of channels to be transformed as vectors or directions (only
      rotation). If channel consists of `normal_x`, `normal_y` and `normal_z`, pass only `normal_` as the parameter here.
+   - `transform_channels_scalar`: List of channels that should not be transformed. This only makes sense to fill when
+     `remove_other_channels` is True (it says these channels will be retained).
  - Improved filter - diagnostics:
    - There are two identical sets of settings, one for the subscriber (input pointclouds, param namespace `receive/`), and
      one for the publisher (output pointclouds, param namespace `publish/`). We describe them here generically with prefix '*'.
