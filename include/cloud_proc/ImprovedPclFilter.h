@@ -4,8 +4,6 @@
 #include <pcl_ros/transforms.h>
 
 #include <diagnostic_updater/publisher.h>
-#include <cras_cpp_common/diagnostics/SlowTopicDiagUpdater.h>
-#include <cras_cpp_common/diagnostics/ImprovedUpdater.h>
 
 #include <cras_cpp_common/diag_utils.hpp>
 #include <cras_cpp_common/nodelet_utils.hpp>
@@ -44,7 +42,7 @@ protected:
   std::unordered_map<std::string, cras::CloudChannelType> transformChannels;
 
   std::unique_ptr<cras::DiagnosedPublisher<sensor_msgs::PointCloud2>> pubOutputDiag;
-  std::unique_ptr<cras::TopicDiagnostic> inputDiag;
+  std::unique_ptr<cras::DiagnosedPubSub<sensor_msgs::PointCloud2>> inputDiag;
   mutable bool diagHasTfProblems = false;
   double receiveRateTolerance;
   double publishRateTolerance;

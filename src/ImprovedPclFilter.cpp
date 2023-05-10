@@ -117,12 +117,14 @@ void ImprovedFilter::onInit()
     }
 
     // diagnostics
-    this->inputDiag = std::make_unique<cras::TopicDiagnostic>(
-        this->pnh_->resolveName("input"), this->getDiagUpdater(), privateParam->paramsInNamespace("receive"));
+    this->inputDiag = std::make_unique<cras::DiagnosedPubSub<sensor_msgs::PointCloud2>>(
+      privateParam->paramsInNamespace("receive"));
+    this->inputDiag->attach(this->getDiagUpdater());
+
     this->pubOutputDiag = std::make_unique<cras::DiagnosedPublisher<PointCloud2>>(
         this->pub_output_, this->getDiagUpdater(), privateParam->paramsInNamespace("publish"));
 
-    if (this->publishPeriodically && this->pubOutputDiag->getDesiredRate().expectedCycleTime() == ros::Duration(-1))
+    if (this->publishPeriodically && this->pubOutputDiag->getDiagnosticTask()->getExpectedRate().expectedCycleTime() == ros::Duration(-1))
     {
         NODELET_ERROR("[%s::onInit] For periodic publishing, publish/rate has to be set",
                       this->getName().c_str());
@@ -135,9 +137,9 @@ void ImprovedFilter::onInit()
         this->startDiagTimer(*this->pnh_);
     }
 
-    if (this->publishPeriodically && this->pubOutputDiag->getDesiredRate().expectedCycleTime().toSec() > 1e-6)
+    if (this->publishPeriodically && this->pubOutputDiag->getDiagnosticTask()->getExpectedRate().expectedCycleTime().toSec() > 1e-6)
     {
-        this->periodicPublishTimer = this->pnh_->createTimer(this->pubOutputDiag->getDesiredRate(),
+        this->periodicPublishTimer = this->pnh_->createTimer(this->pubOutputDiag->getDiagnosticTask()->getExpectedRate(),
             &ImprovedFilter::periodicComputePublish, this);
     }
 
@@ -148,7 +150,7 @@ void ImprovedFilter::input_indices_callback(const sensor_msgs::PointCloud2_<std:
                                             const ImprovedFilter::PointIndicesConstPtr& indices)
 {
     this->updateThreadName();
-    this->inputDiag->tick(cloud->header.stamp);
+    this->inputDiag->getDiagnosticTask()->tick(cloud->header.stamp);
 
     // If cloud is given, check if it's valid
     if (!this->isValid(cloud))
