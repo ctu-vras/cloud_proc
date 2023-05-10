@@ -77,43 +77,6 @@ Parameters:
  - `fields`: List of fields to which the 6-DOF transform should be applied.
  - `rotate`: List of fields to which only the rotation part of the transform should be applied (e.g. normals).
 
-## odom_tf
-
-Transform odometry messages into TFs
-
-Topics:
- - `odom`: Incoming odometry.
- - `odom_new`: The odometry after applying all options of this node (just for verification).
- - TF output.
- 
-Parameters:
- - `stamp`: If True, add current timestamp to the transform, otherwise use the one from the odom message.
- - `time_offset`: Add this offset to the timestamp.
- - `max_age`: Do not process odom messages older than this limit.
- - `odom_frame`: If nonempty, override the incoming odom parent frame to this value.
- - `robot_frame`: If nonempty, use TF to lookup transform between odom child frame and this frame, and publish the TF
-   between odom parent and `robot_frame`.
- - `reuse_tf`: If `robot_frame` is set, this option specifies whether the transform between odom child and `robot_frame`
-   will be read only once (as a static transform), or every time.
-
-## tf_odom
-
-Publish PoseStamped and Odometry messages that correspond to a given transform.
-
-Topics:
- - TF input.
- - `odom`: The output odometry.
- - `pose`: The output pose.
- - `trigger`: Input message of any type with header. If used, the odometry will be published towards the same time as is
-              in the messagë́'s header.
-
-Parameters:
- - `parent_frame`: Parent frame for the TF lookup.
- - `child_frame`: Child frame for the TF lookup.
- - `timeout`: Timeout for the TF lookup.
- - `timer_freq`: If set, the node will publish odometry at the given frequency.
- - `no_wait`: If set, the TF lookup will look up just the latest available transform, not the one with the given timestamp.
-
 ## Improved PCL-based filters CropBoxImproved and PassThroughImproved
 
 This is a bunch of C++ nodelets that extend the functionality of nodelets from `pcl_ros`.
